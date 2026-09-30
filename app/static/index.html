@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#5b3df5">
+<script>
+  // 테마를 CSS보다 먼저 적용해 깜빡임을 막는다. 값: system(기본) / light / dark
+  try {
+    var t = localStorage.getItem("theme");
+    if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
+  } catch (e) {}
+</script>
+<title>밑줄</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="style.css">
+<link rel="preload" as="image" href="splash-fg.png">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-cards" viewBox="0 0 24 24"><rect x="3" y="6" width="13" height="15" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 3h10a3 3 0 0 1 3 3v11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v15H6a2 2 0 0 0-2 2V5Z M4 20a2 2 0 0 0 2 1h13v-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9 8h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></symbol>
+  <symbol id="i-speaker" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4Z" fill="currentColor"/><path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-camera" viewBox="0 0 24 24"><path d="M4 8a2 2 0 0 1 2-2h2l1.5-2h5L16 6h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.5" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-flame" viewBox="0 0 24 24"><path d="M12 2c1 4 6 6 6 12a6 6 0 0 1-12 0c0-3 1.5-4.5 3-6 0 2 1 3 2 3 0-4-1-6 1-9Z" fill="currentColor"/></symbol>
+  <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M12 2c.6 5 2.4 7.4 8 8-5.6.6-7.4 3-8 8-.6-5-2.4-7.4-8-8 5.6-.6 7.4-3 8-8Z" fill="currentColor"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2-1.6-2-3.4-2.4.9a7.4 7.4 0 0 0-1.7-1L15 3.5h-4l-.4 2.4a7.4 7.4 0 0 0-1.7 1l-2.4-.9-2 3.4 2 1.6a7.6 7.6 0 0 0 0 2l-2 1.6 2 3.4 2.4-.9c.5.4 1.1.8 1.7 1l.4 2.4h4l.4-2.4c.6-.2 1.2-.6 1.7-1l2.4.9 2-3.4-2-1.6Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.5" fill="currentColor"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z" fill="currentColor"/></symbol>
+  <symbol id="i-auto" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17Z" fill="currentColor"/></symbol>
+  <symbol id="i-pen" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+</svg>
+
+<div id="splash" class="splash" aria-hidden="true">
+  <div class="splash-art"><img src="splash-fg.png" alt=""></div>
+  <div class="splash-title">밑줄</div>
+  <div class="splash-sub">책에 그은 줄이 단어 카드가 되는 곳</div>
+</div>
+
+<div class="bg" aria-hidden="true"><i></i><i></i><i></i></div>
+
+<main>
+
+<!-- 학습 -->
+<section id="view-study" class="view">
+  <div id="study-home" class="study-home">
+    <header class="hello">
+      <button id="btn-settings" class="icon-btn settings-btn" aria-label="설정"><svg><use href="#i-gear"/></svg></button>
+      <p class="eyebrow" id="hello-date"></p>
+      <h1>오늘도 <span class="hl">한 세트</span><br>가볼까요?</h1>
+    </header>
+
+    <div class="bento">
+      <div class="tile tile-hero">
+        <div class="ring" id="ring" style="--p:0">
+          <div class="ring-in"><b id="st-due">-</b><span>복습할 단어</span></div>
+        </div>
+        <div class="hero-side">
+          <div class="streak"><svg><use href="#i-flame"/></svg><b id="st-streak">0</b>일 연속</div>
+          <p class="muted small">오늘 <b id="st-today">0</b>번 넘겼어요</p>
+        </div>
+      </div>
+      <div class="tile tile-new"><b id="st-new">-</b><span>새 단어</span></div>
+      <div class="tile tile-master"><b id="st-mastered">-</b><span>암기 완료</span></div>
+      <div class="tile tile-total"><b id="st-total">-</b><span>전체 단어</span></div>
+    </div>
+
+    <p id="study-empty" class="empty" hidden>지금 복습할 단어가 없어요.<br>추가 탭에서 책 사진을 올려 보세요.</p>
+    <button id="btn-start" class="btn-fab">학습 시작 <svg><use href="#i-cards"/></svg></button>
+  </div>
+
+  <div id="study-run" class="study-run" hidden>
+    <div class="progress-row">
+      <button id="btn-quit" class="icon-btn" aria-label="그만하기"><svg><use href="#i-x"/></svg></button>
+      <div class="progress"><div id="progress-bar"></div></div>
+      <span id="progress-text" class="count">0/0</span>
+    </div>
+    <div class="deck">
+      <div class="ghost-card g2"></div>
+      <div class="ghost-card g1"></div>
+      <div id="card" class="card">
+        <div class="tint tint-know"></div>
+        <div class="tint tint-dunno"></div>
+        <div class="stamp stamp-know"><svg><use href="#i-check"/></svg>알아요</div>
+        <div class="stamp stamp-dunno"><svg><use href="#i-x"/></svg>모름</div>
+        <div class="card-top">
+          <span class="gram-label">문법 공식</span>
+          <span id="card-box" class="chip"></span>
+        </div>
+        <div class="card-front">
+          <div class="blob" aria-hidden="true"></div>
+          <div id="card-word" class="card-word" data-speak="word"></div>
+          <button class="speak" data-speak="word" aria-label="발음 듣기"><svg><use href="#i-speaker"/></svg></button>
+          <p id="card-hint" class="hint">탭해서 뜻 보기</p>
+        </div>
+        <div id="card-back" class="card-back" hidden>
+          <div class="meaning-row"><span id="card-pos" class="pos"></span><span id="card-meaning" class="meaning"></span></div>
+          <div class="example" data-speak="example">
+            <p id="card-example" class="example-en"></p>
+            <p id="card-example-ko" class="example-ko"></p>
+            <span class="example-hint"><svg><use href="#i-speaker"/></svg>탭하면 예문을 읽어줘요</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="swipe-buttons">
+      <button id="btn-dunno" class="choice dunno"><svg><use href="#i-x"/></svg>모름</button>
+      <button id="btn-know" class="choice know"><svg><use href="#i-check"/></svg>알아요</button>
+    </div>
+  </div>
+
+  <div id="study-done" class="study-done" hidden>
+    <div class="done-badge"><svg><use href="#i-sparkle"/></svg></div>
+    <h2>세트 완료!</h2>
+    <p id="done-text" class="muted"></p>
+    <button id="btn-again" class="btn-fab">다음 세트 <svg><use href="#i-cards"/></svg></button>
+    <button id="btn-home" class="btn-text">처음으로</button>
+  </div>
+</section>
+
+<!-- 단어장 -->
+<section id="view-words" class="view" hidden>
+  <header class="page-head">
+    <h1>단어장</h1>
+    <span id="words-count" class="count-pill"></span>
+  </header>
+  <div class="search"><input id="search" type="search" placeholder="단어·공식 또는 뜻 검색"></div>
+  <div class="seg" id="kind-filter" role="tablist">
+    <button data-kind="" class="on">전체</button>
+    <button data-kind="vocab">어휘</button>
+    <button data-kind="grammar">문법 공식</button>
+  </div>
+  <ul id="word-list" class="word-list"></ul>
+</section>
+
+<!-- 추가 -->
+<section id="view-add" class="view" hidden>
+  <header class="page-head"><h1>단어 추가</h1></header>
+  <label class="drop">
+    <span class="drop-icon"><svg><use href="#i-camera"/></svg></span>
+    <b>책 사진 찍기 / 선택</b>
+    <span class="muted small"><span class="ink ink-blue"></span>파란 펜은 어휘로 &nbsp;<span class="ink ink-red"></span>빨간 펜은 문법 공식으로<br>뜻·예문까지 자동으로 만들어요</span>
+    <input id="file-input" type="file" accept="image/*" multiple hidden>
+  </label>
+  <p id="upload-status" class="muted small center"></p>
+  <div class="panel">
+    <div class="panel-head"><svg><use href="#i-pen"/></svg><h3>직접 추가</h3></div>
+    <textarea id="manual-words" rows="3" placeholder="한 줄에 하나씩 — 단어도, 문법 공식도 돼요&#10;allocate&#10;사역동사 + 목적어 + 동사원형"></textarea>
+    <button id="btn-manual" class="btn-tonal"><svg><use href="#i-sparkle"/></svg>AI로 채우기</button>
+  </div>
+  <h3 class="list-title">처리 내역</h3>
+  <ul id="job-list" class="job-list"></ul>
+</section>
+
+</main>
+
+<nav class="tabs">
+  <button data-view="study" class="active"><span class="pill"><svg><use href="#i-cards"/></svg></span><span class="lbl">학습</span></button>
+  <button data-view="words"><span class="pill"><svg><use href="#i-book"/></svg></span><span class="lbl">단어장</span></button>
+  <button data-view="add"><span class="pill"><svg><use href="#i-plus"/></svg></span><span class="lbl">추가</span></button>
+</nav>
+
+<div id="sheet-scrim" class="scrim" hidden></div>
+<div id="sheet" class="sheet" role="dialog" aria-label="설정" hidden>
+  <div class="grabber"></div>
+  <h2>설정</h2>
+  <div class="setting">
+    <div class="setting-label">화면 테마</div>
+    <div class="theme-pick" id="theme-pick">
+      <button data-theme="system"><svg><use href="#i-auto"/></svg>시스템</button>
+      <button data-theme="light"><svg><use href="#i-sun"/></svg>라이트</button>
+      <button data-theme="dark"><svg><use href="#i-moon"/></svg>다크</button>
+    </div>
+  </div>
+  <div class="setting">
+    <label class="switch between"><span>카드가 나오면 발음 자동 재생</span><input type="checkbox" id="opt-autospeak"><span class="track"><span class="knob"></span></span></label>
+  </div>
+  <button id="sheet-close" class="btn-tonal wide">완료</button>
+</div>
+
+<div id="viewer" class="viewer" hidden>
+  <div class="viewer-scroll"><img id="viewer-img" alt="올린 책 사진"></div>
+  <button id="viewer-close" class="icon-btn viewer-close" aria-label="닫기"><svg><use href="#i-x"/></svg></button>
+</div>
+
+<div id="install-help" class="install-help" hidden>
+  <b>앱 설치가 안 되나요?</b>
+  <p>폰이 이 서버의 HTTPS 인증서를 아직 신뢰하지 않아서예요.
+  <span id="ca-help" hidden><b id="ca-url"></b> 를 받아 설정 → 보안 → 인증서 설치 → <b>CA 인증서</b>로 설치한 뒤</span>
+  Chrome으로 다시 열어 주세요.</p>
+  <button id="install-help-close" class="btn-text">닫기</button>
+</div>
+
+<div id="toast" class="toast" hidden></div>
+<script src="app.js"></script>
+</body>
+</html>

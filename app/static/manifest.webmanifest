@@ -1,0 +1,17 @@
+{
+  "name": "밑줄",
+  "short_name": "밑줄",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#5b3df5",
+  "theme_color": "#5b3df5",
+  "icons": [
+    { "src": "icon-any-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-any-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-any-1024.png", "sizes": "1024x1024", "type": "image/png", "purpose": "any" },
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

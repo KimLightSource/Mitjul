@@ -1,0 +1,17 @@
+services:
+  vocab:
+    build: ./app
+    image: vocab:local
+    container_name: vocab
+    restart: unless-stopped
+    ports:
+      - "${VOCAB_PORT:-8000}:8000"
+    volumes:
+      # SQLite DB(vocab.db)와 업로드된 책 사진(uploads/)이 여기에 쌓인다. 학습 기록의 유일한 사본.
+      - ./data:/data
+    # VOCAB_WORKER_TOKEN 등 설정·비밀은 .env에 둔다(권한 0600, 저장소에 넣지 않는다). .env.example 참고.
+    env_file: .env
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health')"]
+      interval: 60s
+      timeout: 5s
