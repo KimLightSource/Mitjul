@@ -1,0 +1,112 @@
+# 검증된 토익 문법 공식 목록 — 빨간 펜 표시·직접 입력한 문법은 이 목록에 있는 것만 카드가 된다.
+# 형식: 공식<TAB>핵심 포인트   (# 로 시작하는 줄과 빈 줄은 무시)
+# 공식 표기 규칙: 구성 요소를 " + "로 잇는다. 대표 단어는 요소 끝 괄호에 "/"로 (예: 사역동사(make/have/let)).
+#   카드는 " + " 기준으로 칸을 나누고 괄호 속 단어를 칩으로 보여 준다. 표기를 바꾸면 기존 카드와 중복 판정이
+#   어긋나니(표기가 같아야 같은 카드), 이미 쓰는 공식의 표기는 함부로 고치지 않는다.
+# 포인트는 40자 안팎. 카드의 "핵심 포인트"에 그대로 나간다.
+
+# ---- 수 일치
+the number of + 복수명사 + 단수동사	주어는 the number(수) — 단수동사, 복수동사 함정 주의
+a number of + 복수명사 + 복수동사	'많은'이라는 뜻 — 복수명사·복수동사
+each/every + 단수명사 + 단수동사	each·every 뒤는 단수명사, 동사도 단수
+one of the + 복수명사 + 단수동사	주어는 one — 명사는 복수, 동사는 단수
+주어 + 수식어(전치사구/분사구) + 동사	수식어 속 명사에 속지 말고 진짜 주어에 동사 수를 맞춘다
+주격 관계대명사(who/which/that) + 동사	관계사절 동사의 수는 선행사에 맞춘다
+either A or B / neither A nor B + B에 맞춘 동사	동사는 가까운 B에 수 일치
+not only A but (also) B + B에 맞춘 동사	동사는 B에 수 일치
+both A and B + 복수동사	both A and B는 항상 복수 취급
+동명사(-ing) 주어 + 단수동사	동명사구 주어는 단수 취급
+
+# ---- 사역·지각·5형식
+사역동사(make/have/let) + 목적어 + 동사원형	목적격 보어 자리에 to부정사 X — 동사원형
+사역동사(have/get) + 목적어 + p.p.	목적어가 '~되는' 관계면 과거분사
+get + 목적어 + to부정사	get은 사역 의미라도 목적격 보어가 to부정사
+help + 목적어 + (to) 동사원형	help 뒤는 to부정사·동사원형 둘 다 가능
+지각동사(see/hear/watch) + 목적어 + 동사원형/-ing	목적격 보어에 동사원형(완료)이나 -ing(진행) 가능, to부정사는 불가
+5형식 동사(ask/require/allow/encourage/advise) + 목적어 + to부정사	목적격 보어는 to부정사
+be asked/required/expected/encouraged + to부정사	5형식 수동태 — 뒤에 to부정사가 남는다
+keep/find/make + 목적어 + 형용사	목적격 보어 자리는 형용사 — 부사 X
+2형식 동사(become/remain/seem/stay) + 형용사	보어 자리 — 부사 X
+
+# ---- 당위·제안
+제안·요구 동사(suggest/recommend/request/require/insist) + that + 주어 + (should) 동사원형	that절 동사는 수·시제와 상관없이 동사원형
+It is important/essential/necessary that + 주어 + (should) 동사원형	당위 형용사 뒤 that절 — 동사원형
+
+# ---- 동명사·to부정사
+동명사 목적어 동사(consider/avoid/suggest/finish/postpone/mind) + -ing	목적어로 동명사만 — to부정사 X
+to부정사 목적어 동사(plan/decide/hope/expect/agree/offer/refuse) + to부정사	목적어로 to부정사만 — 동명사 X
+begin/start/continue + to부정사/-ing	둘 다 쓸 수 있는 동사 — 명사형은 X
+have trouble/difficulty + -ing	~하는 데 어려움을 겪다 — 뒤에 동명사
+It is + 형용사 + for + 목적어 + to부정사	가주어 It — 의미상 주어는 for + 목적어
+look forward to + -ing	to는 전치사 — 뒤에 동명사
+be committed/dedicated/devoted to + -ing	to는 전치사 — 뒤에 명사·동명사
+be used to + -ing	~에 익숙하다 — to는 전치사
+used to + 동사원형	(과거에) ~하곤 했다
+in addition to + 명사/-ing	to는 전치사 — 뒤에 명사·동명사
+명사(ability/chance/opportunity/effort) + to부정사	이 명사들 뒤는 to부정사로 꾸민다
+too + 형용사/부사 + to부정사	너무 ~해서 ~할 수 없다
+형용사/부사 + enough + to부정사	enough는 형용사·부사 뒤에 온다
+in order to/so as to + 동사원형	~하기 위해서 (목적)
+전치사(by/without/upon) + -ing	전치사 뒤 동사는 동명사로
+동명사(-ing) + 목적어	뒤에 목적어가 있으면 명사형 X — 동명사
+
+# ---- 시제
+시간·조건 접속사(when/if/once/as soon as/until/before) + 현재시제	주절이 미래여도 부사절은 현재시제
+since + 과거 시점 + 현재완료(have p.p.)	since가 있으면 주절은 현재완료
+for/over the past + 기간 + 현재완료(have p.p.)	기간 표현이 지금까지 이어지면 현재완료
+by the time + 과거시제 + 과거완료(had p.p.)	그때까지 이미 끝난 일은 과거완료
+
+# ---- 가정법·도치
+If + 주어 + 과거동사 + 주어 + would/could + 동사원형	가정법 과거 — 현재 사실의 반대
+If + 주어 + had p.p. + 주어 + would/could have p.p.	가정법 과거완료 — 과거 사실의 반대
+Should + 주어 + 동사원형	If 생략 도치 — 혹시라도 ~하면 (미래 가정)
+Had + 주어 + p.p.	If 생략 도치 — 가정법 과거완료
+Enclosed/Attached/Included + is/are + 주어	보어가 앞으로 나온 도치 — 동사는 뒤 주어에 수 일치
+
+# ---- 분사
+감정동사 p.p.(interested/satisfied/excited) + 사람	사람이 감정을 느끼면 과거분사
+감정동사 -ing(interesting/satisfying/exciting) + 사물	감정을 일으키는 쪽이면 현재분사
+명사 + p.p./-ing	꾸밈받는 명사가 당하면 p.p., 하면 -ing
+-ing/p.p. 분사구문 + 주절	주절 주어와 능동이면 -ing, 수동이면 p.p.
+접속사(when/while/after/before) + -ing/p.p.	분사구문에 접속사를 남긴 형태 — 뒤에 주어+동사 없이 분사
+
+# ---- 수동태
+be p.p. + 목적어 없음	빈칸 뒤 목적어가 없으면 수동태
+자동사(occur/happen/arise/rise) + 수동태 불가	목적어를 못 받는 자동사는 be p.p. X
+
+# ---- 관계사·명사절
+whose + 관사 없는 명사 + 동사	소유격 관계대명사 — 바로 뒤 명사에 관사 X
+what + 불완전한 문장	what은 선행사 포함 — 앞에 명사가 없다
+전치사 + 관계대명사(which/whom) + 완전한 문장	전치사가 앞으로 나오면 뒤 문장은 완전하다
+관계부사(where/when) + 완전한 문장	관계부사 뒤는 빠진 성분이 없는 문장
+콤마(,) + which/who	계속적 용법 — that은 쓸 수 없다
+whether + to부정사	whether는 to부정사와 OK — if는 불가
+
+# ---- 전치사 vs 접속사
+despite/in spite of + 명사	뜻은 although와 같지만 뒤에 명사(구)
+although/even though + 주어 + 동사	양보 접속사 — 뒤에 절
+because of/due to + 명사	이유 전치사 — 뒤에 명사(구)
+during + 명사	기간 전치사 — 뒤에 명사 (while은 절)
+while + 주어 + 동사/-ing	while은 접속사 — 뒤에 절이나 분사
+until + 시점	그때까지 계속 (상태·동작의 지속)
+by + 시점	그때까지 완료 (마감)
+provided/providing (that) + 주어 + 동사	~라면 — 조건 접속사
+
+# ---- 품사 자리
+관사 + (부사) + 형용사 + 명사	명사 앞 빈칸은 형용사
+be + 부사 + p.p./-ing	be와 분사 사이 빈칸은 부사
+have + 부사 + p.p.	완료 시제 사이 빈칸은 부사
+소유격 + own + 명사	own 앞에는 소유격이 온다
+by + 재귀대명사(oneself)	혼자서, 직접
+
+# ---- 비교·상관
+비교급 + than	than이 보이면 비교급
+the + 최상급 + of/in	범위 표현과 함께 최상급
+the 비교급 ~ + the 비교급 ~	~할수록 더 ~하다
+as + 원급 + as	as 사이에는 원급
+much/even/far/still + 비교급	비교급 강조 — very는 불가
+so + 형용사/부사 + that	너무 ~해서 ~하다
+such + (a) + 형용사 + 명사 + that	such 뒤에는 명사가 온다
+many/a few/few + 복수 가산명사	가산명사 수량 형용사
+much/a little/little + 불가산명사	불가산명사 수량 형용사
+another + 단수명사	another 뒤는 단수명사 (other 뒤는 복수명사)

@@ -74,8 +74,19 @@
       <div class="tile tile-total"><b id="st-total">-</b><span>전체 단어</span></div>
     </div>
 
-    <p id="study-empty" class="empty" hidden>지금 복습할 단어가 없어요.<br>추가 탭에서 책 사진을 올려 보세요.</p>
-    <button id="btn-start" class="btn-fab">학습 시작 <svg><use href="#i-cards"/></svg></button>
+    <div class="kind-pick" id="kind-pick" role="radiogroup" aria-label="학습 범위">
+      <button data-kind="" role="radio">섞어서</button>
+      <button data-kind="vocab" role="radio">어휘만</button>
+      <button data-kind="grammar" role="radio">문법만</button>
+    </div>
+    <p id="study-empty" class="empty" hidden></p>
+    <button id="btn-start" class="btn-fab"><span id="btn-start-label">학습 시작</span> <svg><use href="#i-cards"/></svg></button>
+    <button id="btn-new-set" class="btn-text new-set" hidden>이어 하지 않고 새 세트로 시작</button>
+    <button id="btn-test" class="test-entry" disabled>
+      <span class="test-entry-icon"><svg><use href="#i-pen"/></svg></span>
+      <span class="test-entry-text"><b>암기 테스트</b><small id="test-entry-sub">암기 완료한 단어가 생기면 열려요</small></span>
+      <span class="test-entry-go">›</span>
+    </button>
   </div>
 
   <div id="study-run" class="study-run" hidden>
@@ -83,6 +94,12 @@
       <button id="btn-quit" class="icon-btn" aria-label="그만하기"><svg><use href="#i-x"/></svg></button>
       <div class="progress"><div id="progress-bar"></div></div>
       <span id="progress-text" class="count">0/0</span>
+    </div>
+    <div class="accent-pick" id="accent-pick" role="radiogroup" aria-label="발음 억양">
+      <button data-accent="us" role="radio">🇺🇸 미국</button>
+      <button data-accent="gb" role="radio">🇬🇧 영국</button>
+      <button data-accent="au" role="radio">🇦🇺 호주</button>
+      <button data-accent="mix" role="radio">섞기</button>
     </div>
     <div class="deck">
       <div class="ghost-card g2"></div>
@@ -94,6 +111,7 @@
         <div class="stamp stamp-dunno"><svg><use href="#i-x"/></svg>모름</div>
         <div class="card-top">
           <span class="gram-label">문법 공식</span>
+          <span id="card-accent" class="chip accent-tag" hidden></span>
           <span id="card-box" class="chip"></span>
         </div>
         <div class="card-front">
@@ -186,6 +204,42 @@
   </div>
   <button id="sheet-close" class="btn-tonal wide">완료</button>
 </div>
+
+<!-- 암기 테스트: 암기 완료 어휘 → 뜻 쓰기 -->
+<section id="test-screen" class="test-screen" hidden>
+  <div class="progress-row">
+    <button id="test-quit" class="icon-btn" aria-label="그만하기"><svg><use href="#i-x"/></svg></button>
+    <div class="progress"><div id="test-bar"></div></div>
+    <span id="test-count" class="count">0/0</span>
+  </div>
+  <div id="test-q" class="test-q">
+    <div class="test-card">
+      <span class="chip test-chip">암기 테스트</span>
+      <div id="test-word" class="test-word"></div>
+      <button id="test-speak" class="speak" aria-label="발음 듣기"><svg><use href="#i-speaker"/></svg></button>
+    </div>
+    <form id="test-form" class="test-form" autocomplete="off">
+      <input id="test-input" placeholder="뜻을 한국어로 적어 보세요" enterkeyhint="done" autocomplete="off">
+      <div class="test-actions">
+        <button type="button" id="test-skip" class="btn-text">모르겠어요</button>
+        <button type="submit" class="btn-fab test-submit">제출</button>
+      </div>
+    </form>
+    <div id="test-feedback" class="test-feedback" hidden>
+      <div id="test-verdict" class="verdict"></div>
+      <div class="fb-row"><span class="fb-label">정답</span><span><span id="test-answer-pos" class="pos"></span> <b id="test-answer"></b></span></div>
+      <div class="fb-row" id="test-mine-row"><span class="fb-label">내 답</span><span id="test-mine"></span></div>
+      <button id="test-next" class="btn-fab test-submit">다음</button>
+    </div>
+  </div>
+  <div id="test-result" class="test-result" hidden>
+    <div class="score-ring" id="test-ring" style="--p:0"><div><b id="test-score">0</b><span id="test-score-of"></span></div></div>
+    <p id="test-score-sub" class="muted center"></p>
+    <p id="test-grading" class="grading" hidden><span class="pulse"></span>AI가 나머지 답을 채점하고 있어요 · 보통 1~2분</p>
+    <ul id="test-list" class="test-list"></ul>
+    <button id="test-close" class="btn-fab">완료</button>
+  </div>
+</section>
 
 <div id="viewer" class="viewer" hidden>
   <div class="viewer-scroll"><img id="viewer-img" alt="올린 책 사진"></div>

@@ -36,21 +36,37 @@ function store(key, val) {
 
 // ---------- 발음 (브라우저 내장 TTS) ----------
 
-let voice = null;
-function pickVoice() {
-  const vs = speechSynthesis.getVoices().filter((v) => v.lang.replace("_", "-").startsWith("en-US"));
-  voice = vs.find((v) => /google/i.test(v.name)) || vs[0] || null;
+// 발음 억양. 폰에 깔린 음성(Android는 보통 Google 음성 엔진)을 쓴다 — 서버·비용 없음.
+// 토익 리스닝처럼 억양을 섞어 들을 수 있게 "mix"는 카드마다 무작위로 고른다.
+const ACCENTS = { us: { lang: "en-US", label: "미국" }, gb: { lang: "en-GB", label: "영국" }, au: { lang: "en-AU", label: "호주" } };
+let accentMode = store("accent") || "us";
+if (!(accentMode in ACCENTS) && accentMode !== "mix") accentMode = "us";
+let cardAccent = "us"; // mix일 때 지금 카드의 억양
+const voices = {}; // accent → SpeechSynthesisVoice (기기에 없으면 없음)
+function pickVoices() {
+  const all = speechSynthesis.getVoices();
+  for (const [k, a] of Object.entries(ACCENTS)) {
+    const vs = all.filter((v) => v.lang.replace("_", "-").toLowerCase() === a.lang.toLowerCase());
+    voices[k] = vs.find((v) => /google/i.test(v.name)) || vs[0] || null;
+  }
 }
 if ("speechSynthesis" in window) {
-  pickVoice();
-  speechSynthesis.addEventListener("voiceschanged", pickVoice);
+  pickVoices();
+  speechSynthesis.addEventListener("voiceschanged", pickVoices);
 }
-function speak(text, rate = 0.95) {
+function rollAccent() {
+  // 음성 목록을 못 받았으면(일부 브라우저) 억양만 지정해서 기기에 맡긴다
+  const have = Object.keys(ACCENTS).filter((k) => voices[k]);
+  const pool = have.length ? have : Object.keys(ACCENTS);
+  cardAccent = pool[Math.floor(Math.random() * pool.length)];
+}
+const currentAccent = () => (accentMode === "mix" ? cardAccent : accentMode);
+function speak(text, rate = 0.95, accent = currentAccent()) {
   if (!("speechSynthesis" in window) || !text) return;
   speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(text);
-  u.lang = "en-US";
-  if (voice) u.voice = voice;
+  u.lang = ACCENTS[accent].lang;
+  if (voices[accent]) u.voice = voices[accent];
   u.rate = rate;
   const btn = $(".card .speak");
   u.onstart = () => btn?.classList.add("playing");
@@ -111,9 +127,184 @@ let firstTry = new Map(); // word id → 처음 넘길 때 알았는지
 let revealed = false;
 let busy = false;
 
+// 학습 범위: "" 섞어서 / vocab 어휘만 / grammar 문법만. 기기별로 기억한다.
+const KIND_NAME = { "": "단어가", vocab: "어휘가", grammar: "문법 공식이" };
+let studyKind = store("studyKind") || "";
+if (!(studyKind in KIND_NAME)) studyKind = "";
+const kindQuery = () => (studyKind ? "&kind=" + studyKind : "");
+
+function renderKindPick() {
+  for (const b of $("#kind-pick").children) {
+    const on = b.dataset.kind === studyKind;
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-checked", on);
+  }
+}
+renderKindPick();
+$("#kind-pick").addEventListener("click", (e) => {
+  const b = e.target.closest("button");
+  if (!b || b.dataset.kind === studyKind) return;
+  studyKind = b.dataset.kind;
+  store("studyKind", studyKind);
+  buzz(8);
+  renderKindPick();
+  loadStats();
+});
+
+// ---------- 암기 테스트 ----------
+// 암기 완료(3단계 이상) 어휘에서 무작위로 내고, 뜻을 적게 한다. 서버가 즉석 채점(거의 같은 뜻 → 정답,
+// 빈 답 → 오답)하고, 판단이 필요한 답은 시험이 끝나면 AI가 '대체로 맞는지' 채점한다(워커, 1~2분).
+// 오답은 서버가 0단계로 내려 다시 학습 카드로 나오게 한다.
+const TEST_SIZE = 20;
+let test = null, ti = 0, testPoll = null;
+const VERDICT = { correct: "정답", wrong: "오답", pending: "채점 중", error: "채점 실패" };
+
+async function startTest() {
+  try { test = await api("/tests?limit=" + TEST_SIZE, { method: "POST" }); }
+  catch (e) { return toast(e.message); }
+  ti = 0;
+  $("#test-result").hidden = true;
+  $("#test-q").hidden = false;
+  $("#test-screen").hidden = false;
+  document.body.classList.add("studying");
+  openLayer("test");
+  showQuestion();
+}
+
+function showQuestion() {
+  const it = test.items[ti];
+  $("#test-word").textContent = it.word;
+  $("#test-count").textContent = `${ti + 1}/${test.items.length}`;
+  $("#test-bar").style.width = (ti / test.items.length) * 100 + "%";
+  $("#test-input").value = "";
+  $("#test-form").hidden = false;
+  $("#test-feedback").hidden = true;
+  $("#test-input").focus();
+  if ($("#opt-autospeak").checked) speak(it.word);
+}
+
+async function submitAnswer(answer) {
+  const it = test.items[ti];
+  let verdict;
+  try {
+    ({ verdict } = await api(`/tests/${test.id}/answers/${it.aid}`, { method: "POST", json: { answer } }));
+  } catch (e) { return toast("저장 실패: " + e.message); }
+  it.verdict = verdict;
+  it.answer = answer;
+  buzz(verdict === "correct" ? 12 : verdict === "wrong" ? [10, 40, 10] : 8);
+  $("#test-input").blur();
+  $("#test-form").hidden = true;
+  const v = $("#test-verdict");
+  v.className = "verdict " + verdict;
+  v.innerHTML = {
+    correct: "✓ 정답",
+    wrong: "✗ 몰랐어요 <small>다시 학습 카드로 보낼게요</small>",
+    pending: "⏳ AI가 채점할게요 <small>시험이 끝나면 확인해요</small>",
+  }[verdict];
+  $("#test-answer-pos").textContent = it.pos;
+  $("#test-answer").textContent = it.meaning;
+  $("#test-mine").textContent = answer || "—";
+  $("#test-mine-row").hidden = !answer;
+  $("#test-feedback").hidden = false;
+  $("#test-next").textContent = ti + 1 < test.items.length ? "다음" : "결과 보기";
+  $("#test-next").focus();
+}
+
+async function nextQuestion() {
+  if (ti + 1 < test.items.length) { ti++; return showQuestion(); }
+  try { test = await api(`/tests/${test.id}/finish`, { method: "POST" }); }
+  catch (e) { return toast("저장 실패: " + e.message); }
+  $("#test-bar").style.width = "100%";
+  $("#test-q").hidden = true;
+  $("#test-result").hidden = false;
+  renderTestResult();
+}
+
+function renderTestResult() {
+  const items = test.items;
+  const correct = items.filter((i) => i.verdict === "correct").length;
+  const wrong = items.filter((i) => i.verdict === "wrong").length;
+  $("#test-score").textContent = correct;
+  $("#test-score-of").textContent = "/" + items.length;
+  requestAnimationFrame(() => $("#test-ring").style.setProperty("--p", items.length ? (correct / items.length) * 100 : 0));
+  $("#test-score-sub").textContent = test.grading
+    ? "채점이 끝나면 점수가 바뀔 수 있어요"
+    : wrong ? `틀린 ${wrong}개는 다시 학습 카드로 보냈어요` : "모두 맞혔어요 🎉";
+  $("#test-grading").hidden = !test.grading;
+  $("#test-list").innerHTML = items.map((i) => `
+    <li>
+      <span class="tl-word">${esc(i.word)}</span>
+      <span class="tl-chip ${i.verdict}">${VERDICT[i.verdict] || ""}</span>
+      <span class="tl-detail">내 답 <b>${esc(i.answer || "—")}</b> · 정답 ${esc(i.meaning)}</span>
+      ${i.graded_by === "ai" && i.reason ? `<span class="tl-reason">AI: ${esc(i.reason)}</span>` : ""}
+    </li>`).join("");
+  clearTimeout(testPoll);
+  if (test.grading) testPoll = setTimeout(async () => {
+    try { test = await api(`/tests/${test.id}`); renderTestResult(); } catch {}
+  }, 4000);
+}
+
+layerClose.test = () => {
+  clearTimeout(testPoll);
+  speechSynthesis?.cancel();
+  // 중간에 나가도 답한 문항은 채점되게 끝내기를 보낸다(안 푼 문항은 서버가 버린다)
+  if (test && $("#test-result").hidden) api(`/tests/${test.id}/finish`, { method: "POST" }).catch(() => {});
+  test = null;
+  $("#test-screen").hidden = true;
+  document.body.classList.remove("studying");
+  loadStats();
+};
+$("#btn-test").addEventListener("click", startTest);
+$("#test-quit").addEventListener("click", () => closeLayer("test"));
+$("#test-close").addEventListener("click", () => closeLayer("test"));
+$("#test-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const a = $("#test-input").value.trim();
+  if (!a) return $("#test-input").focus();
+  submitAnswer(a);
+});
+$("#test-skip").addEventListener("click", () => submitAnswer(""));
+$("#test-next").addEventListener("click", nextQuestion);
+$("#test-speak").addEventListener("click", () => test && speak(test.items[ti].word));
+
+// ---------- 이어 하기 ----------
+// 진행 중인 세트(카드 순서·위치·처음 결과)는 서버에 저장된다. 카드를 넘길 때마다 저장하고, 세트를
+// 끝까지 마치면 지운다. 앱을 끄거나 ✕로 나가도 홈에서 "이어서 학습"으로 돌아온다(다른 기기에서도).
+let pending = null; // 서버에 남아 있는 세트 (없으면 null)
+
+function sessionBody(at) {
+  return {
+    kind: studyKind,
+    pos: at,
+    queue: queue.map((w) => ({ id: w.id, again: !!w.again })),
+    first: Object.fromEntries(firstTry),
+  };
+}
+function saveSession(at = pos) {
+  api("/session", { method: "PUT", json: sessionBody(at) }).catch((e) => toast("진행 저장 실패: " + e.message));
+}
+function clearSession() {
+  pending = null;
+  api("/session", { method: "DELETE" }).catch(() => {});
+}
+
+function renderStartButton(due) {
+  const label = $("#btn-start-label");
+  if (pending) {
+    label.innerHTML = `이어서 학습 <span class="resume-count">${pending.pos + 1}/${pending.queue.length}</span>`;
+    $("#btn-start").disabled = false;
+    $("#btn-new-set").hidden = due === 0;
+  } else {
+    label.textContent = "학습 시작";
+    $("#btn-start").disabled = due === 0;
+    $("#btn-new-set").hidden = true;
+  }
+}
+
 async function loadStats() {
   try {
-    const s = await api("/stats");
+    pending = await api("/session").catch(() => null);
+    const s = await api("/stats?" + kindQuery().slice(1));
     $("#st-due").textContent = s.due;
     $("#st-new").textContent = s.new;
     $("#st-total").textContent = s.total;
@@ -124,7 +315,15 @@ async function loadStats() {
     const pct = s.today + s.due ? (s.today / (s.today + s.due)) * 100 : 0;
     requestAnimationFrame(() => $("#ring").style.setProperty("--p", pct.toFixed(1)));
     $("#study-empty").hidden = s.due > 0;
-    $("#btn-start").disabled = s.due === 0;
+    $("#study-empty").innerHTML = studyKind && s.total
+      ? `지금 복습할 ${KIND_NAME[studyKind]} 없어요.<br>다른 범위를 골라 보세요.`
+      : "지금 복습할 단어가 없어요.<br>추가 탭에서 책 사진을 올려 보세요.";
+    $("#study-empty").hidden = s.due > 0 || !!pending;
+    renderStartButton(s.due);
+    $("#btn-test").disabled = !s.testable;
+    $("#test-entry-sub").textContent = s.testable
+      ? `암기 완료 ${s.testable}개 중 최대 ${Math.min(s.testable, TEST_SIZE)}문제 · 뜻 쓰기`
+      : "암기 완료한 단어가 생기면 열려요";
   } catch (e) { toast("서버 연결 실패: " + e.message); }
 }
 
@@ -136,17 +335,30 @@ function setStudyScreen(which) {
   $("#study-done").hidden = which !== "done";
 }
 
-async function startSet() {
-  try {
-    queue = await api("/study?limit=" + SET_SIZE);
-  } catch (e) { return toast("불러오기 실패: " + e.message); }
-  if (!queue.length) {
-    if (layers.includes("study")) return closeLayer("study");
-    setStudyScreen("home");
-    return loadStats();
+async function startSet({ fresh = false } = {}) {
+  if (!fresh) {
+    // 진행 중인 세트가 있으면 그 자리에서 이어 한다 (홈을 거치지 않고 들어온 경우를 위해 다시 확인)
+    try { pending = await api("/session"); } catch { pending = null; }
   }
-  pos = 0;
-  firstTry = new Map();
+  if (pending && !fresh) {
+    queue = pending.queue;
+    pos = pending.pos;
+    firstTry = new Map(Object.entries(pending.first).map(([k, v]) => [Number(k), v]));
+    pending = null;
+  } else {
+    try {
+      queue = await api("/study?limit=" + SET_SIZE + kindQuery());
+    } catch (e) { return toast("불러오기 실패: " + e.message); }
+    if (!queue.length) {
+      clearSession();
+      if (layers.includes("study")) return closeLayer("study");
+      setStudyScreen("home");
+      return loadStats();
+    }
+    pos = 0;
+    firstTry = new Map();
+    saveSession();
+  }
   setStudyScreen("run");
   openLayer("study"); // 학습 중 뒤로가기 → 홈
   showCard();
@@ -200,28 +412,72 @@ function highlightGrammar(example, formula) {
 }
 
 function boxLabel(w) {
+  if (w.again) return ["다시 보기", "again"]; // 이번 세트에서 '모름'으로 뒤에 다시 붙은 카드
   if (w.seen === 0) return ["새 단어", "new"];
   if (w.box === 0) return ["다시 보기", "again"];
   return ["복습 " + w.box + "단계", ""];
 }
 
-function highlight(example, word) {
-  const html = esc(example);
-  const words = word.trim().split(/\s+/);
-  let re;
-  if (words.length === 1) {
-    // 활용형(allocated, allocating 등)까지 잡으려고 어간 앞부분으로 찾는다.
-    const w = words[0];
-    const stem = w.length > 4 ? w.slice(0, Math.max(4, w.length - 2)) : w;
-    re = new RegExp("\\b(" + stem.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "[a-z]*)", "i");
-  } else {
-    re = new RegExp("(" + word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ")", "i");
+// 예문에서 표제어를 찾아 강조한다. 숙어는 예문에서 모양이 바뀌므로 단어 단위로 느슨하게 찾는다:
+//  - be → is/are/was/…   (be situated in → "is situated in")
+//  - 활용형·불규칙형     (remain → remains, look → looking, take → took)
+//  - 사이에 낀 목적어     (run A by → "run these figures by"; 토큰 사이 최대 3단어)
+//  - 자리 표시 A/B/someone/one's/oneself 는 아무 단어로
+const BE_FORMS = "be|is|are|was|were|been|being|am";
+const IRREGULAR_VERBS = {
+  take: "took|taken", make: "made", give: "gave|given", get: "got|gotten", go: "went|gone",
+  come: "came", keep: "kept", hold: "held", bring: "brought", run: "ran", see: "saw|seen",
+  find: "found", leave: "left", meet: "met", pay: "paid", lay: "laid", set: "set", put: "put",
+  buy: "bought", sell: "sold", send: "sent", spend: "spent", tell: "told", think: "thought",
+  carry: "carried", seek: "sought", draw: "drew|drawn", fall: "fell|fallen", write: "wrote|written",
+  break: "broke|broken", choose: "chose|chosen", rise: "rose|risen", lead: "led", deal: "dealt",
+  have: "had|has", do: "did|does|done", say: "said", stand: "stood", catch: "caught",
+};
+const FUNCTION_WORDS = new Set("a an the to in on at by for with of up out off as into onto from over under and or than about".split(" "));
+const PLACEHOLDER = /^(a|b|sb|sth|someone|somebody|something|~|\.\.\.|…)$/i;
+
+function tokenPattern(t, single) {
+  const low = t.toLowerCase();
+  const reEsc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  if (low === "be") return `(?:${BE_FORMS})\\b`;
+  if (/^(one's|someone's|one’s)$/.test(low)) return "(?:my|your|his|her|its|our|their|[\\w-]+['’]s)\\b";
+  if (low === "oneself") return "[\\w]+(?:self|selves)\\b";
+  if (!single && FUNCTION_WORDS.has(low)) return reEsc(low) + "\\b";
+  // 활용형까지: 끝의 e/y는 떼고(situate → situat-ed, satisfy → satisf-ied) 뒤에 영문자 허용
+  const stem = low.length > 3 ? low.replace(/(e|y)$/, "") : low;
+  const alts = [reEsc(stem) + "[a-z]*"];
+  if (IRREGULAR_VERBS[low]) alts.push(IRREGULAR_VERBS[low]);
+  return `(?:${alts.join("|")})`;
+}
+
+function highlightRegex(word) {
+  let toks = word.trim().split(/\s+/);
+  // 앞뒤 자리 표시(furnish A with B의 B)는 강조 범위에서 뺀다
+  while (toks.length > 1 && PLACEHOLDER.test(toks[0])) toks.shift();
+  while (toks.length > 1 && PLACEHOLDER.test(toks[toks.length - 1])) toks.pop();
+  const single = toks.length === 1;
+  let pat = "", gapNeeded = false;
+  for (const t of toks) {
+    if (PLACEHOLDER.test(t)) { gapNeeded = true; continue; }
+    if (pat) pat += gapNeeded ? "\\s+(?:[\\w'’,-]+\\s+){1,4}?" : "\\s+(?:[\\w'’,-]+\\s+){0,3}?";
+    pat += tokenPattern(t, single);
+    gapNeeded = false;
   }
-  return html.replace(re, "<mark>$1</mark>");
+  return new RegExp("(?<![\\w'’])" + pat, "i");
+}
+
+function highlight(example, word) {
+  // 원문에서 찾고 나서 조각마다 이스케이프 (tomorrow's 같은 따옴표가 &#39;로 바뀌기 전에 찾기 위해)
+  const m = (example || "").match(highlightRegex(word));
+  if (!m) return esc(example);
+  const i = m.index, j = i + m[0].length;
+  return esc(example.slice(0, i)) + "<mark>" + esc(example.slice(i, j)) + "</mark>" + esc(example.slice(j));
 }
 
 function showCard() {
   const w = queue[pos];
+  if (accentMode === "mix") rollAccent();
+  renderCardAccent();
   const card = $("#card");
   card.className = "card";
   void card.offsetWidth; // 애니메이션 재시작
@@ -268,7 +524,10 @@ function decide(known) {
   if (!firstTry.has(w.id)) firstTry.set(w.id, known);
   api(`/words/${w.id}/review`, { method: "POST", json: { known } }).catch((e) => toast("저장 실패: " + e.message));
   // 모르는 단어는 이번 세트 끝에 한 번 더 나온다 (산타 토익과 같은 방식).
-  if (!known) queue.push({ ...w, seen: w.seen + 1, box: 0 });
+  if (!known) queue.push({ ...w, seen: w.seen + 1, box: 0, again: true });
+  // 넘긴 직후 상태를 저장 — 여기서 앱을 꺼도 다음 카드부터 이어진다
+  if (pos + 1 < queue.length) saveSession(pos + 1);
+  else clearSession();
 
   const card = $("#card");
   card.classList.add("fly");
@@ -343,8 +602,9 @@ function finishSet() {
   card.addEventListener("pointercancel", () => { down = false; if (dragging) snapBack(); });
 })();
 
-$("#btn-start").addEventListener("click", startSet);
-$("#btn-again").addEventListener("click", startSet);
+$("#btn-start").addEventListener("click", () => startSet());
+$("#btn-again").addEventListener("click", () => startSet({ fresh: true }));
+$("#btn-new-set").addEventListener("click", () => { clearSession(); startSet({ fresh: true }); });
 layerClose.study = () => { speechSynthesis?.cancel(); setStudyScreen("home"); loadStats(); };
 $("#btn-home").addEventListener("click", () => closeLayer("study"));
 $("#btn-quit").addEventListener("click", () => closeLayer("study"));
@@ -355,6 +615,45 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "ArrowRight") decide(true);
   else if (e.key === "ArrowLeft") decide(false);
   else if (e.key === " ") { e.preventDefault(); reveal(); if (!isGrammar(queue[pos])) speak(queue[pos].word); }
+});
+
+// 학습 화면의 억양 버튼. 누르면 바로 바꾸고 지금 카드를 그 억양으로 다시 읽는다.
+function renderAccentPick() {
+  for (const b of $("#accent-pick").children) {
+    const on = b.dataset.accent === accentMode;
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-checked", on);
+  }
+}
+function renderCardAccent() {
+  const w = queue[pos];
+  $("#card-accent").hidden = accentMode !== "mix" || !w;
+  $("#card-accent").textContent = ACCENTS[cardAccent].label + " 발음";
+}
+const warned = new Set();
+function warnMissingVoice(accent) {
+  // 음성 목록을 아직 못 받았으면 없는지 확정할 수 없다
+  if (!("speechSynthesis" in window) || !speechSynthesis.getVoices().length) return;
+  if (voices[accent] || warned.has(accent)) return;
+  warned.add(accent);
+  toast(`이 폰에 ${ACCENTS[accent].label} 음성이 없어요 — 폰 설정 → 텍스트 음성 변환 → Google 엔진 → 음성 데이터 설치`);
+}
+renderAccentPick();
+$("#accent-pick").addEventListener("click", (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  accentMode = b.dataset.accent;
+  store("accent", accentMode);
+  buzz(8);
+  renderAccentPick();
+  if (accentMode === "mix") rollAccent();
+  renderCardAccent();
+  if (accentMode !== "mix") warnMissingVoice(accentMode);
+  const w = queue[pos];
+  if (!w) return;
+  // 뒤집은 카드는 예문, 아니면 단어. 문법 공식은 예문만 읽는다.
+  if (revealed && w.example) speak(w.example, 0.9);
+  else if (!isGrammar(w)) speak(w.word);
 });
 
 const auto = $("#opt-autospeak");
@@ -462,8 +761,9 @@ $("#word-list").addEventListener("submit", async (e) => {
 
 // ---------- 추가 ----------
 
-async function resize(file, max = 2000) {
-  // 폰 원본(수 MB)을 그대로 보내지 않는다. 긴 변 2000px JPEG이면 밑줄 판별에 충분하다.
+async function resize(file, max = 3000) {
+  // 폰 원본(수 MB)을 그대로 보내지 않는다. 두 페이지를 한 장에 찍으면 볼펜 밑줄이 얇아서
+  // 2000px로는 놓쳤다(2026-09-30). 워커가 이 사진을 2×2 조각으로 잘라 보므로 3000px이면 충분하다.
   const bmp = await createImageBitmap(file, { imageOrientation: "from-image" });
   const scale = Math.min(1, max / Math.max(bmp.width, bmp.height));
   const c = document.createElement("canvas");
