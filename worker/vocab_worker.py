@@ -11,13 +11,20 @@
 설정은 ~/.config/vocab/worker.env (권한 0600, 저장소 밖)에서 읽는다:
   VOCAB_URL=http://<앱 서버>:8000
   VOCAB_WORKER_TOKEN=...
-  VOCAB_MODEL=opus              (선택, 기본 opus — sonnet은 사진 속 작은 볼펜 표시를 더 많이 놓친다)
+  VOCAB_MODEL=opus              (선택, 사진 작업 모델. 기본 opus — sonnet은 사진 속 작은 볼펜 표시를 더 많이 놓친다)
+  VOCAB_MODEL_TEXT=sonnet       (선택, 직접 입력·바꿔 말하기 채우기 모델. 기본 sonnet)
+  VOCAB_MODEL_GRADE=sonnet      (선택, 암기 테스트 채점 모델. 기본 sonnet)
 claude 인증은 ~/.config/claude-headless.env 의 CLAUDE_CODE_OAUTH_TOKEN(`claude setup-token`으로
 발급한 1년짜리 토큰)을 쓴다. 파일이 없으면 ~/.claude의 로그인 세션을 그대로 쓴다.
 표준 라이브러리만 쓴다 — pip/venv 없이 python3만 있으면 된다. Pillow(Debian `python3-pil`)가
 있으면 사진을 겹치는 조각으로 잘라 함께 보여 준다(작은 볼펜 표시 인식이 크게 좋아진다). 없으면 전체 사진만 쓴다.
+
+claude는 Claude Code 기본 시스템 프롬프트·도구 없이 부른다(--system-prompt, --tools ""). 기본값으로 부르면
+호출마다 약 37k 토큰이 붙고, 사진을 Read 도구로 한 장씩 열 때마다 턴이 늘어 그만큼 다시 보낸다.
+사진은 stream-json 입력으로 한 메시지에 모두 넣어 한 턴에 끝낸다. 작업마다 토큰 사용량을 로그에 남긴다.
 """
 
+import base64
 import fcntl
 import json
 import os
@@ -50,6 +57,9 @@ CLAUDE_TIMEOUT = 840  # 서버의 STALE_SECONDS(15분)보다 짧게
 TILE_GRID = 2
 TILE_OVERLAP = 0.12
 TILE_LONG = 1500
+# 전체 사진은 claude가 어차피 긴 변 약 1568px로 줄여서 보므로 미리 줄여 보낸다(요청 크기 제한도 피한다).
+FULL_LONG = 1568
+SYSTEM_PROMPT = "너는 사용자가 지시한 형식의 JSON 객체 하나만 출력하는 도우미다."
 # claude 자체가 실패하면(인증 만료 등) 이 파일을 남기고, 그동안은 매분 재시도하지 않는다.
 BACKOFF_FILE = WORK / ".claude-failed"
 BACKOFF_SECONDS = 15 * 60
@@ -137,6 +147,9 @@ def make_tiles(image_path):
     im = ImageOps.exif_transpose(Image.open(image_path)).convert("RGB")
     w, h = im.size
     tw, th = w / TILE_GRID, h / TILE_GRID
+    full = im.copy()
+    full.thumbnail((FULL_LONG, FULL_LONG), Image.LANCZOS)
+    full.save(image_path.with_suffix(".full.jpg"), quality=92)
     names = []
     for r in range(TILE_GRID):
         for c in range(TILE_GRID):
@@ -151,21 +164,60 @@ def make_tiles(image_path):
     return names
 
 
+# 어휘 카드의 바꿔 말하기·헷갈리는 단어 규칙. 새 카드(prompt.md)와 기존 카드 채우기(ENRICH_PROMPT)가 같이 쓴다.
+RELATED_RULES = """- `paraphrases`: **토익 패러프레이징** 0~3개. 지문의 이 단어가 문제·선택지에서 바꿔 쓰여 나오는 표현
+  (예: purchase → buy, acquire / alternative → option, substitute). 각 항목 `word`(영어)와 `meaning`(짧은 한국어 뜻).
+  자연스러운 것이 없으면 빈 배열.
+- `confusables`: **헷갈리는 단어** 0~2개. **철자·모양이 비슷한데 뜻이 다른** 단어여서 뜻을 착각하기 쉬운 것만
+  (예: alternative ↔ alternation, adapt ↔ adopt, considerable ↔ considerate, economic ↔ economical,
+  successful ↔ successive, inhibit ↔ inhabit, affect ↔ effect). 각 항목 `word`(사전형), `meaning`(짧은 한국어 뜻),
+  `tip`(둘을 구분하는 포인트, 한국어 30자 이내, 예: "-tive는 '대안', -tion은 '교대'").
+  넣지 않는 것: 표제어 자신, 활용형(allocated), **뜻은 같고 품사만 다른 파생어**(allocate → allocation,
+  tax → taxable, satisfy → satisfying, finalize → final), 철자가 닮지 않은 단어, 쉬운 기초 단어(tax, design,
+  copy, live). 대부분의 단어는 해당이 없다 — **억지로 채우지 말고 빈 배열**로 둔다.
+- 문법 공식 항목에는 이 두 필드를 넣지 않는다.
+"""
+
+ENRICH_PROMPT = """너는 한국인 수험생의 토익(TOEIC) 단어장을 만드는 도우미다. 아래 어휘 카드 각각에 바꿔 말하기와 헷갈리는
+단어를 채운다. 카드의 뜻·품사는 바꾸지 않는다.
+
+{rules}
+카드(JSON):
+{items}
+
+JSON 객체 하나만 출력한다. 설명이나 코드 펜스를 붙이지 않는다. 모든 카드에 대해 id를 그대로 써서 한 줄씩:
+{{"related": [{{"id": 1, "paraphrases": [{{"word": "...", "meaning": "..."}}], "confusables": [{{"word": "...", "meaning": "...", "tip": "..."}}]}}]}}
+"""
+
+
+def enrich(job, model):
+    """기존 어휘 카드 채우기(job kind 'enrich') → [{id, paraphrases, confusables}]"""
+    items = [{"id": i["id"], "word": i["word"], "pos": i["pos"], "meaning": i["meaning"]} for i in job["payload"]["items"]]
+    text = run_claude(ENRICH_PROMPT.format(rules=RELATED_RULES, items=json.dumps(items, ensure_ascii=False, indent=1)), model)
+    start, end = text.find("{"), text.rfind("}")
+    if start < 0 or end < 0:
+        raise ValueError("응답에 JSON이 없음: " + text[:300])
+    related = json.loads(text[start : end + 1]).get("related")
+    if not isinstance(related, list):
+        raise ValueError("related 배열이 없음")
+    return related
+
+
 def build_prompt(job, image_name, formulas, tiles=()):
     template = (HERE / "prompt.md").read_text()
     if job["kind"] == "photo":
         if tiles:
             listing = "\n".join(f"- `{t}`" for t in tiles)
             how = (
-                "볼펜 표시가 작아서 전체 사진만으로는 놓치기 쉽기 때문에, 같은 사진을 겹치게 잘라 확대한 조각도 준비했다:\n"
-                f"{listing}\n\n"
-                "Read 도구로 전체 사진을 먼저 열어 배치를 파악한 뒤, **조각을 하나도 빠짐없이 전부** 열어 표시를 찾아라. "
+                "볼펜 표시가 작아서 전체 사진만으로는 놓치기 쉽기 때문에, 같은 사진을 2×2로 겹치게 잘라 확대한 조각도 "
+                f"이 메시지 위에 첨부했다(위·왼쪽부터):\n{listing}\n\n"
+                "전체 사진으로 배치를 파악한 뒤, **조각을 하나도 빠짐없이 전부** 살펴 표시를 찾아라. "
                 "조각끼리 가장자리가 겹치므로 같은 표시는 한 번만 센다.\n\n"
             )
         else:
-            how = "Read 도구로 이 이미지를 열어라.\n\n"
+            how = "\n\n"
         task = (
-            f"현재 디렉터리의 `{image_name}` 파일은 사용자가 공부 중인 토익 교재 페이지를 찍은 사진이다. "
+            f"이 메시지 위에 첨부한 `{image_name}` 사진은 사용자가 공부 중인 토익 교재 페이지를 찍은 것이다. "
             f"{how}"
             "사용자는 볼펜 색으로 표시를 구분한다(밑줄, 동그라미, 덧칠 모두 해당):\n"
             "- **파란색** = 모르는 어휘 → 어휘 항목. 밑줄이 숙어의 일부에 걸쳤으면 의미가 통하는 덩어리로 잡는다. "
@@ -189,7 +241,8 @@ def build_prompt(job, image_name, formulas, tiles=()):
             f"철자가 틀렸으면 바로잡은 형태로 쓴다.\n\n{words}"
         )
     listing = "\n".join(f"{i}. {f}  — {p}" for i, (f, p) in enumerate(formulas, 1))
-    return template.replace("{TASK}", task).replace("{GRAMMAR_FORMULAS}", listing)
+    return (template.replace("{TASK}", task).replace("{GRAMMAR_FORMULAS}", listing)
+            .replace("{RELATED_RULES}", RELATED_RULES))
 
 
 def parse_result(text):
@@ -203,29 +256,69 @@ def parse_result(text):
     return data
 
 
-def run_claude(prompt, model):
-    """claude -p 를 돌려 응답 텍스트를 돌려준다. 인증 만료 등 claude 자체 문제는 ClaudeUnavailable."""
+def image_block(path):
+    media = "image/png" if path.suffix.lower() == ".png" else "image/jpeg"
+    return {"type": "image", "source": {"type": "base64", "media_type": media,
+                                        "data": base64.b64encode(path.read_bytes()).decode()}}
+
+
+def run_claude(prompt, model, images=()):
+    """claude -p 를 돌려 응답 텍스트를 돌려준다. 인증 만료 등 claude 자체 문제는 ClaudeUnavailable.
+    images: [(이름, 경로)] — 프롬프트 앞에 이름표와 함께 붙인다. 사용량은 LAST_USAGE에 남긴다."""
     WORK.mkdir(parents=True, exist_ok=True)
+    content = []
+    for name, path in images:
+        content += [{"type": "text", "text": f"`{name}`:"}, image_block(path)]
+    content.append({"type": "text", "text": prompt})
+    message = json.dumps({"type": "user", "message": {"role": "user", "content": content}})
     cmd = [
-        CLAUDE, "-p", prompt,
+        CLAUDE, "-p",
         "--model", model,
-        "--output-format", "json",
-        "--allowedTools", "Read",
+        "--input-format", "stream-json",
+        "--output-format", "stream-json", "--verbose",
+        "--system-prompt", SYSTEM_PROMPT,
+        "--tools", "",
+        "--setting-sources", "",
+        "--strict-mcp-config",
+        "--disable-slash-commands",
         "--no-session-persistence",
     ]
     env = {**os.environ, **load_env(CLAUDE_ENV_FILE)}
-    p = subprocess.run(cmd, cwd=WORK, env=env, capture_output=True, text=True, timeout=CLAUDE_TIMEOUT)
-    try:
-        out = json.loads(p.stdout)
-    except json.JSONDecodeError:
+    p = subprocess.run(cmd, cwd=WORK, env=env, input=message, capture_output=True, text=True, timeout=CLAUDE_TIMEOUT)
+    out = None
+    for line in p.stdout.splitlines():
+        try:
+            ev = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if ev.get("type") == "result":
+            out = ev
+    if out is None:
         raise ClaudeUnavailable(f"claude 실행 실패(종료코드 {p.returncode}): {(p.stderr or p.stdout)[-300:]}")
+    usage = out.get("usage") or {}
+    LAST_USAGE.update(model=model, turns=out.get("num_turns"), cost=out.get("total_cost_usd"),
+                      input=usage.get("input_tokens", 0) + usage.get("cache_creation_input_tokens", 0),
+                      cache_read=usage.get("cache_read_input_tokens", 0), output=usage.get("output_tokens", 0))
     if p.returncode != 0 or out.get("is_error"):
         msg = str(out.get("result"))[:300]
         # 모델이 한 글자도 못 냈으면(인증 만료·사용량 한도 등) 작업 탓이 아니다
-        if not (out.get("usage") or {}).get("output_tokens"):
+        if not usage.get("output_tokens"):
             raise ClaudeUnavailable("AI 워커 사용 불가: " + msg)
         raise RuntimeError("claude 오류: " + msg)
     return out.get("result", "")
+
+
+LAST_USAGE = {}
+
+
+def usage_note():
+    """마지막 claude 호출의 사용량 한 줄 (로그용). cost는 API 요금 환산값 — 구독 사용량 비교용 지표."""
+    u = LAST_USAGE
+    if not u:
+        return ""
+    cost = f", ${u['cost']:.3f}" if isinstance(u.get("cost"), (int, float)) else ""
+    return (f" [{u['model']} 입력 {u['input']:,} + 캐시 {u['cache_read']:,}, 출력 {u['output']:,}, "
+            f"{u['turns']}턴{cost}]")
 
 
 GRADE_PROMPT = """너는 한국인 수험생의 토익 단어 시험 채점자다. 각 문항은 영어 표제어, 단어장에 적힌 한국어 뜻,
@@ -288,18 +381,28 @@ def process(api, job, model):
             log(f"job {job['id']} 조각 만들기 실패, 전체 사진만 사용: {e}")
             tiles = []
     formulas = load_formulas()
+    images = []
+    if image_name:
+        full = (WORK / image_name).with_suffix(".full.jpg")
+        images = [(image_name, full if full.exists() else WORK / image_name)] + [(t, WORK / t) for t in tiles]
     try:
-        text = run_claude(build_prompt(job, image_name, formulas, tiles), model)
+        text = run_claude(build_prompt(job, image_name, formulas, tiles), model, images)
         return enforce_formulas(parse_result(text), formulas)
     finally:
-        for name in ([image_name] if image_name else []) + tiles:
-            (WORK / name).unlink(missing_ok=True)
+        for _, path in images:
+            path.unlink(missing_ok=True)
+        if image_name:
+            (WORK / image_name).unlink(missing_ok=True)
 
 
 def main():
     env = load_env(ENV_FILE)
     api = Api(env["VOCAB_URL"], env["VOCAB_WORKER_TOKEN"])
-    model = env.get("VOCAB_MODEL", "opus")
+    # 사진은 작은 볼펜 표시를 놓치지 않게 opus, 이미지 없는 작업은 더 가벼운 모델로 충분하다.
+    models = {"photo": env.get("VOCAB_MODEL", "opus"),
+              "text": env.get("VOCAB_MODEL_TEXT", "sonnet"),
+              "enrich": env.get("VOCAB_MODEL_TEXT", "sonnet"),
+              "grade": env.get("VOCAB_MODEL_GRADE", "sonnet")}
     if BACKOFF_FILE.exists() and time.time() - BACKOFF_FILE.stat().st_mtime < BACKOFF_SECONDS:
         return 0
 
@@ -313,18 +416,27 @@ def main():
             return 0
         job = json.loads(raw)
         log(f"job {job['id']} ({job['kind']}) 시작, 시도 {job['attempts'] + 1}")
+        model = models.get(job["kind"], models["text"])
+        LAST_USAGE.clear()
         try:
             if job["kind"] == "grade":
                 grades = grade(job, model)
                 _, raw = api.req("POST", f"/api/worker/jobs/{job['id']}/result", {"grades": grades})
-                log(f"job {job['id']} 채점 완료: {json.loads(raw)['graded']}문항")
+                log(f"job {job['id']} 채점 완료: {json.loads(raw)['graded']}문항{usage_note()}")
+                BACKOFF_FILE.unlink(missing_ok=True)
+                continue
+            if job["kind"] == "enrich":
+                related = enrich(job, model)
+                _, raw = api.req("POST", f"/api/worker/jobs/{job['id']}/result", {"related": related})
+                res = json.loads(raw)
+                log(f"job {job['id']} 채우기 완료: {res['filled']}개{usage_note()}")
                 BACKOFF_FILE.unlink(missing_ok=True)
                 continue
             data = process(api, job, model)
             _, raw = api.req("POST", f"/api/worker/jobs/{job['id']}/result",
                              {"words": data["words"], "note": data.get("note") or None})
             res = json.loads(raw)
-            log(f"job {job['id']} 완료: 추가 {res['added']}, 중복 {res['duplicates']}")
+            log(f"job {job['id']} 완료: 추가 {res['added']}, 중복 {res['duplicates']}{usage_note()}")
             BACKOFF_FILE.unlink(missing_ok=True)
         except ClaudeUnavailable as e:
             log(f"job {job['id']} 보류 — {e} ({BACKOFF_SECONDS // 60}분 뒤 재시도)")
@@ -332,7 +444,7 @@ def main():
             BACKOFF_FILE.touch()
             return 1
         except Exception as e:  # 작업 하나가 실패해도 다음 작업은 계속한다
-            log(f"job {job['id']} 실패: {e}")
+            log(f"job {job['id']} 실패: {e}{usage_note()}")
             try:
                 api.req("POST", f"/api/worker/jobs/{job['id']}/result", {"error": str(e)[:2000]})
             except Exception as e2:

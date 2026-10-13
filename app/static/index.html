@@ -30,6 +30,7 @@
   <symbol id="i-speaker" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4Z" fill="currentColor"/><path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
   <symbol id="i-camera" viewBox="0 0 24 24"><path d="M4 8a2 2 0 0 1 2-2h2l1.5-2h5L16 6h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.5" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
   <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></symbol>
+  <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
   <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="i-flame" viewBox="0 0 24 24"><path d="M12 2c1 4 6 6 6 12a6 6 0 0 1-12 0c0-3 1.5-4.5 3-6 0 2 1 3 2 3 0-4-1-6 1-9Z" fill="currentColor"/></symbol>
   <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M12 2c.6 5 2.4 7.4 8 8-5.6.6-7.4 3-8 8-.6-5-2.4-7.4-8-8 5.6-.6 7.4-3 8-8Z" fill="currentColor"/></symbol>
@@ -37,6 +38,7 @@
   <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.5" fill="currentColor"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
   <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z" fill="currentColor"/></symbol>
   <symbol id="i-auto" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17Z" fill="currentColor"/></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 3.2l2.6 5.5 6 .8-4.4 4.1 1.1 5.9L12 16.6l-5.3 2.9 1.1-5.9-4.4-4.1 6-.8L12 3.2Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
   <symbol id="i-pen" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
 </svg>
 
@@ -78,15 +80,23 @@
       <button data-kind="" role="radio">섞어서</button>
       <button data-kind="vocab" role="radio">어휘만</button>
       <button data-kind="grammar" role="radio">문법만</button>
+      <button data-kind="starred" role="radio">★ 북마크</button>
     </div>
     <p id="study-empty" class="empty" hidden></p>
     <button id="btn-start" class="btn-fab"><span id="btn-start-label">학습 시작</span> <svg><use href="#i-cards"/></svg></button>
     <button id="btn-new-set" class="btn-text new-set" hidden>이어 하지 않고 새 세트로 시작</button>
-    <button id="btn-test" class="test-entry" disabled>
-      <span class="test-entry-icon"><svg><use href="#i-pen"/></svg></span>
-      <span class="test-entry-text"><b>암기 테스트</b><small id="test-entry-sub">암기 완료한 단어가 생기면 열려요</small></span>
-      <span class="test-entry-go">›</span>
-    </button>
+    <div class="test-row">
+      <button id="btn-test" class="test-entry" disabled>
+        <span class="test-entry-icon"><svg><use href="#i-pen"/></svg></span>
+        <span class="test-entry-text"><b>암기 테스트</b><small id="test-entry-sub">암기 완료한 단어가 생기면 열려요</small></span>
+        <span class="test-entry-go">›</span>
+      </button>
+      <!-- 채점 기록: 맨 아래에 두면 떠 있는 탭바에 가려서 테스트 버튼 옆에 둔다 -->
+      <button id="btn-test-history" class="test-history-btn" aria-label="채점 기록" hidden>
+        <svg><use href="#i-book"/></svg><span>기록</span>
+        <span id="test-history-grading" class="history-badge" title="AI 채점 중" hidden><span class="pulse"></span></span>
+      </button>
+    </div>
   </div>
 
   <div id="study-run" class="study-run" hidden>
@@ -94,6 +104,7 @@
       <button id="btn-quit" class="icon-btn" aria-label="그만하기"><svg><use href="#i-x"/></svg></button>
       <div class="progress"><div id="progress-bar"></div></div>
       <span id="progress-text" class="count">0/0</span>
+      <button id="btn-undo" class="icon-btn" aria-label="되돌리기" title="되돌리기 (Backspace)" disabled><svg><use href="#i-undo"/></svg></button>
     </div>
     <div class="accent-pick" id="accent-pick" role="radiogroup" aria-label="발음 억양">
       <button data-accent="us" role="radio">🇺🇸 미국</button>
@@ -110,6 +121,7 @@
         <div class="stamp stamp-know"><svg><use href="#i-check"/></svg>알아요</div>
         <div class="stamp stamp-dunno"><svg><use href="#i-x"/></svg>모름</div>
         <div class="card-top">
+          <button id="card-star" class="star-btn card-star" aria-label="북마크" aria-pressed="false"><svg><use href="#i-star"/></svg></button>
           <span class="gram-label">문법 공식</span>
           <span id="card-accent" class="chip accent-tag" hidden></span>
           <span id="card-box" class="chip"></span>
@@ -121,15 +133,17 @@
           <p id="card-hint" class="hint">탭해서 뜻 보기</p>
         </div>
         <div id="card-back" class="card-back" hidden>
-          <div class="meaning-row"><span id="card-pos" class="pos"></span><span id="card-meaning" class="meaning"></span></div>
+          <div id="card-senses" class="senses"></div>
           <div class="example" data-speak="example">
             <p id="card-example" class="example-en"></p>
             <p id="card-example-ko" class="example-ko"></p>
-            <span class="example-hint"><svg><use href="#i-speaker"/></svg>탭하면 예문을 읽어줘요</span>
+            <span class="example-hint"><svg><use href="#i-speaker"/></svg>탭하면 읽어줘요 · 모르는 단어는 꾹 눌러 추가</span>
           </div>
+          <div id="card-related" class="related" hidden></div>
         </div>
       </div>
     </div>
+    <button id="add-sel" class="add-sel" hidden><svg><use href="#i-plus"/></svg><span>단어장에 추가</span></button>
     <div class="swipe-buttons">
       <button id="btn-dunno" class="choice dunno"><svg><use href="#i-x"/></svg>모름</button>
       <button id="btn-know" class="choice know"><svg><use href="#i-check"/></svg>알아요</button>
@@ -142,6 +156,7 @@
     <p id="done-text" class="muted"></p>
     <button id="btn-again" class="btn-fab">다음 세트 <svg><use href="#i-cards"/></svg></button>
     <button id="btn-home" class="btn-text">처음으로</button>
+    <button id="btn-done-undo" class="btn-text"><svg><use href="#i-undo"/></svg> 마지막 카드 되돌리기</button>
   </div>
 </section>
 
@@ -156,6 +171,7 @@
     <button data-kind="" class="on">전체</button>
     <button data-kind="vocab">어휘</button>
     <button data-kind="grammar">문법 공식</button>
+    <button data-kind="starred">★ 북마크</button>
   </div>
   <ul id="word-list" class="word-list"></ul>
 </section>
@@ -205,6 +221,15 @@
   <button id="sheet-close" class="btn-tonal wide">완료</button>
 </div>
 
+<!-- 암기 테스트 채점 기록: 지난 시험 목록 → 누르면 결과 화면(테스트 화면 위에 열림) -->
+<section id="history-screen" class="test-screen" hidden>
+  <div class="progress-row">
+    <button id="history-close" class="icon-btn" aria-label="닫기"><svg><use href="#i-x"/></svg></button>
+    <h2 class="history-title">채점 기록</h2>
+  </div>
+  <ul id="history-list" class="history-list"></ul>
+</section>
+
 <!-- 암기 테스트: 암기 완료 어휘 → 뜻 쓰기 -->
 <section id="test-screen" class="test-screen" hidden>
   <div class="progress-row">
@@ -227,7 +252,7 @@
     </form>
     <div id="test-feedback" class="test-feedback" hidden>
       <div id="test-verdict" class="verdict"></div>
-      <div class="fb-row"><span class="fb-label">정답</span><span><span id="test-answer-pos" class="pos"></span> <b id="test-answer"></b></span></div>
+      <div class="fb-row"><span class="fb-label">정답</span><div id="test-answer" class="senses fb-senses"></div></div>
       <div class="fb-row" id="test-mine-row"><span class="fb-label">내 답</span><span id="test-mine"></span></div>
       <button id="test-next" class="btn-fab test-submit">다음</button>
     </div>
@@ -251,7 +276,7 @@
   <p>폰이 이 서버의 HTTPS 인증서를 아직 신뢰하지 않아서예요.
   <span id="ca-help" hidden><b id="ca-url"></b> 를 받아 설정 → 보안 → 인증서 설치 → <b>CA 인증서</b>로 설치한 뒤</span>
   Chrome으로 다시 열어 주세요.</p>
-  <button id="install-help-close" class="btn-text">닫기</button>
+  <button id="install-help-close" class="btn-text">다시 보지 않기</button>
 </div>
 
 <div id="toast" class="toast" hidden></div>

@@ -124,11 +124,12 @@ const SET_SIZE = 20;
 let queue = [];
 let pos = 0;
 let firstTry = new Map(); // word id → 처음 넘길 때 알았는지
+let undoStack = []; // 이번 세트에서 넘긴 순서 — 되돌리기는 뒤에서부터 하나씩 무른다
 let revealed = false;
 let busy = false;
 
 // 학습 범위: "" 섞어서 / vocab 어휘만 / grammar 문법만. 기기별로 기억한다.
-const KIND_NAME = { "": "단어가", vocab: "어휘가", grammar: "문법 공식이" };
+const KIND_NAME = { "": "단어가", vocab: "어휘가", grammar: "문법 공식이", starred: "북마크가" };
 let studyKind = store("studyKind") || "";
 if (!(studyKind in KIND_NAME)) studyKind = "";
 const kindQuery = () => (studyKind ? "&kind=" + studyKind : "");
@@ -201,8 +202,7 @@ async function submitAnswer(answer) {
     wrong: "✗ 몰랐어요 <small>다시 학습 카드로 보낼게요</small>",
     pending: "⏳ AI가 채점할게요 <small>시험이 끝나면 확인해요</small>",
   }[verdict];
-  $("#test-answer-pos").textContent = it.pos;
-  $("#test-answer").textContent = it.meaning;
+  $("#test-answer").innerHTML = sensesHtml(it);
   $("#test-mine").textContent = answer || "—";
   $("#test-mine-row").hidden = !answer;
   $("#test-feedback").hidden = false;
@@ -235,7 +235,7 @@ function renderTestResult() {
     <li>
       <span class="tl-word">${esc(i.word)}</span>
       <span class="tl-chip ${i.verdict}">${VERDICT[i.verdict] || ""}</span>
-      <span class="tl-detail">내 답 <b>${esc(i.answer || "—")}</b> · 정답 ${esc(i.meaning)}</span>
+      <span class="tl-detail">내 답 <b>${esc(i.answer || "—")}</b> · 정답 ${sensesInline(i)}</span>
       ${i.graded_by === "ai" && i.reason ? `<span class="tl-reason">AI: ${esc(i.reason)}</span>` : ""}
     </li>`).join("");
   clearTimeout(testPoll);
@@ -244,16 +244,73 @@ function renderTestResult() {
   }, 4000);
 }
 
-layerClose.test = () => {
+layerClose.test = async () => {
   clearTimeout(testPoll);
   speechSynthesis?.cancel();
-  // 중간에 나가도 답한 문항은 채점되게 끝내기를 보낸다(안 푼 문항은 서버가 버린다)
-  if (test && $("#test-result").hidden) api(`/tests/${test.id}/finish`, { method: "POST" }).catch(() => {});
+  const t = test, midway = $("#test-result").hidden;
   test = null;
   $("#test-screen").hidden = true;
+  if (!layers.includes("history")) document.body.classList.remove("studying");
+  // 중간에 나가도 답한 문항은 채점되게 끝내기를 보낸다(안 푼 문항은 서버가 버린다)
+  let grading = t?.grading;
+  if (t && midway) {
+    try { grading = (await api(`/tests/${t.id}/finish`, { method: "POST" })).grading; } catch {}
+  }
+  if (grading && !layers.includes("history")) toast("채점이 끝나면 ‘채점 기록’에서 볼 수 있어요");
+  if (layers.includes("history")) loadHistory();
+  loadStats();
+};
+
+// 지난 결과 다시 보기(채점 기록에서). 채점 중이면 결과 화면이 그대로 4초마다 갱신된다.
+async function openTestResult(id) {
+  try { test = await api(`/tests/${id}`); } catch (e) { return toast("불러오기 실패: " + e.message); }
+  $("#test-q").hidden = true;
+  $("#test-result").hidden = false;
+  $("#test-bar").style.width = "100%";
+  $("#test-count").textContent = `${test.items.length}문제`;
+  $("#test-screen").hidden = false;
+  document.body.classList.add("studying");
+  openLayer("test");
+  renderTestResult();
+}
+
+// ---------- 채점 기록 ----------
+let historyPoll = null;
+async function loadHistory() {
+  clearTimeout(historyPoll);
+  let list;
+  try { list = await api("/tests"); } catch (e) { return toast("불러오기 실패: " + e.message); }
+  $("#history-list").innerHTML = list.length ? list.map((t) => `
+    <li><button data-id="${t.id}">
+      <span class="hl-score">${t.correct}<span>/${t.total}</span></span>
+      <span class="hl-body">
+        <b>${fmtTime(t.created_at)}</b>
+        ${t.grading ? `<span class="grading-dot"><span class="pulse"></span>AI 채점 중 · ${t.pending}문항</span>`
+          : `<small>정답 ${t.correct} · 오답 ${t.wrong}${t.error ? ` · 채점 실패 ${t.error}` : ""}</small>`}
+      </span>
+      <span class="test-entry-go">›</span>
+    </button></li>`).join("")
+    : `<li class="empty">아직 채점 기록이 없어요.</li>`;
+  if (list.some((t) => t.grading)) historyPoll = setTimeout(loadHistory, 4000);
+}
+function openHistory() {
+  $("#history-screen").hidden = false;
+  document.body.classList.add("studying");
+  openLayer("history");
+  loadHistory();
+}
+layerClose.history = () => {
+  clearTimeout(historyPoll);
+  $("#history-screen").hidden = true;
   document.body.classList.remove("studying");
   loadStats();
 };
+$("#btn-test-history").addEventListener("click", openHistory);
+$("#history-close").addEventListener("click", () => closeLayer("history"));
+$("#history-list").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-id]");
+  if (b) openTestResult(+b.dataset.id);
+});
 $("#btn-test").addEventListener("click", startTest);
 $("#test-quit").addEventListener("click", () => closeLayer("test"));
 $("#test-close").addEventListener("click", () => closeLayer("test"));
@@ -315,15 +372,24 @@ async function loadStats() {
     const pct = s.today + s.due ? (s.today / (s.today + s.due)) * 100 : 0;
     requestAnimationFrame(() => $("#ring").style.setProperty("--p", pct.toFixed(1)));
     $("#study-empty").hidden = s.due > 0;
-    $("#study-empty").innerHTML = studyKind && s.total
+    // 북마크 범위는 복습일과 상관없이 북마크 전부를 낸다
+    $(".ring-in span").textContent = studyKind === "starred" ? "북마크" : "복습할 단어";
+    $("#study-empty").innerHTML = studyKind === "starred" && s.total
+      ? "북마크한 단어가 없어요.<br>카드나 단어장에서 ☆를 눌러 모아 보세요."
+      : studyKind && s.total
       ? `지금 복습할 ${KIND_NAME[studyKind]} 없어요.<br>다른 범위를 골라 보세요.`
       : "지금 복습할 단어가 없어요.<br>추가 탭에서 책 사진을 올려 보세요.";
     $("#study-empty").hidden = s.due > 0 || !!pending;
     renderStartButton(s.due);
     $("#btn-test").disabled = !s.testable;
+    // 오늘 테스트에서 맞힌 단어는 서버가 그날 테스트에서 뺀다(testable에 이미 빠져 있다)
+    const today = s.tested_today ? ` · 오늘 맞힌 ${s.tested_today}개 제외` : "";
     $("#test-entry-sub").textContent = s.testable
-      ? `암기 완료 ${s.testable}개 중 최대 ${Math.min(s.testable, TEST_SIZE)}문제 · 뜻 쓰기`
+      ? `암기 완료 ${s.testable}개 중 최대 ${Math.min(s.testable, TEST_SIZE)}문제${today || " · 뜻 쓰기"}`
+      : s.tested_today ? `오늘은 암기 완료 어휘를 다 맞혔어요 (${s.tested_today}개)`
       : "암기 완료한 단어가 생기면 열려요";
+    $("#btn-test-history").hidden = !s.tests;
+    $("#test-history-grading").hidden = !s.tests_grading;
   } catch (e) { toast("서버 연결 실패: " + e.message); }
 }
 
@@ -345,6 +411,7 @@ async function startSet({ fresh = false } = {}) {
     pos = pending.pos;
     firstTry = new Map(Object.entries(pending.first).map(([k, v]) => [Number(k), v]));
     pending = null;
+    undoStack = []; // 이어 하기 전에 넘긴 카드는 되돌리지 않는다
   } else {
     try {
       queue = await api("/study?limit=" + SET_SIZE + kindQuery());
@@ -357,6 +424,7 @@ async function startSet({ fresh = false } = {}) {
     }
     pos = 0;
     firstTry = new Map();
+    undoStack = [];
     saveSession();
   }
   setStudyScreen("run");
@@ -365,6 +433,24 @@ async function startSet({ fresh = false } = {}) {
 }
 
 const isGrammar = (w) => w.kind === "grammar";
+
+// ---------- 뜻(품사별 여러 줄) ----------
+// 품사가 여럿인 단어(leave: 동사·명사)는 뜻을 줄로 나눠 저장한다. 첫 줄은 대표 품사(words.pos)의 뜻,
+// 둘째 줄부터는 "[명사] 휴가"처럼 품사를 앞에 붙인다. 예전 형식 "뜻; (명사) 뜻"도 같은 모양으로 읽는다.
+const POS_NAMES = "명사|동사|형용사|부사|전치사|접속사|구";
+function senses(w) {
+  const text = (w.meaning || "").replace(new RegExp(`\\s*[;；]\\s*\\((${POS_NAMES})\\)\\s*`, "g"), "\n[$1] ");
+  return text.split("\n").map((s) => s.trim()).filter(Boolean).map((line, i) => {
+    const m = line.match(/^\[(.+?)\]\s*/);
+    return m ? { pos: m[1], text: line.slice(m[0].length) } : { pos: i === 0 ? w.pos : "", text: line };
+  });
+}
+const sensesHtml = (w) => senses(w).map((s) =>
+  `<div class="meaning-row">${s.pos ? `<span class="pos">${esc(s.pos)}</span>` : ""}<span class="meaning">${esc(s.text)}</span></div>`
+).join("");
+const sensesInline = (w) => senses(w).map((s) =>
+  (s.pos ? `<span class="pos-s">${esc(s.pos)}</span>` : "") + esc(s.text)
+).join(" · ");
 
 // "사역동사(make/have/let) + 목적어 + 동사원형" → 세로로 쌓인 칸 + 칸 + 칸
 function parseFormula(text) {
@@ -387,28 +473,71 @@ function formulaHtml(text) {
   ).join("") + "</div>";
 }
 
-// 공식에 자주 나오는 동사의 불규칙 변화 (had the employee submit → have 강조)
-const IRREGULAR = {
-  have: ["had", "has"], make: ["made"], get: ["got", "gotten"], see: ["saw", "seen"],
-  hear: ["heard"], feel: ["felt"], keep: ["kept"], leave: ["left"], find: ["found"],
-  be: ["is", "are", "was", "were", "been"], do: ["did", "does", "done"], go: ["went", "gone"],
-};
-
-// 문법 예문에서 공식의 영어 부분(the number of, make/have/let …)을 찾아 강조한다
-function highlightGrammar(example, formula) {
-  const terms = [];
+// 공식에서 예문 속에 나타날 영어 표현을 뽑는다.
+//  - 괄호 속 대표 단어:  사역동사(make/have/let) → make, have, let
+//  - 영어로 된 칸:       the number of, It is, be asked/required → be asked, be required
+//  - 괄호 없는 / 나열:   begin/start/continue → 각각, have trouble/difficulty → have trouble, have difficulty
+//  - p.p. · -ing · ~ 같은 문법 기호는 예문에 그대로 나오지 않으므로 뺀다
+function formulaTerms(formula) {
+  const out = [];
+  const add = (text) => {
+    const alts = text.split("/").map((x) => x.trim()).filter(Boolean);
+    const firstWords = (alts[0] || "").split(/\s+/);
+    for (let a of alts) {
+      const n = a.split(/\s+/).length;
+      // 'have trouble/difficulty'처럼 뒤 대안이 짧으면 앞 대안의 앞부분을 빌려 온다
+      if (n < firstWords.length) a = firstWords.slice(0, firstWords.length - n).join(" ") + " " + a;
+      a = a.split(/\s+/).filter((t) => !/^(p\.p\.|-ing|~|\(.*\))$/i.test(t)).join(" ");
+      if (a && !/[가-힣]/.test(a)) out.push(a);
+    }
+  };
   for (const p of parseFormula(formula)) {
-    if (p.en) terms.push(p.main);
-    for (const x of p.subs) if (!/[가-힣]/.test(x) && !x.startsWith("-")) terms.push(x, ...(IRREGULAR[x.toLowerCase()] || []));
+    if (p.en) add(p.main);
+    for (const x of p.subs) add(x);
   }
-  const html = esc(example);
-  if (!terms.length) return html;
-  const alt = terms
-    .map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+"))
-    .sort((a, b) => b.length - a.length)
-    .map((t) => (/\s/.test(t) ? t : t + "[a-z]*"))
-    .join("|");
-  return html.replace(new RegExp("\\b(" + alt + ")", "gi"), "<mark>$1</mark>");
+  return out;
+}
+
+// 문법 예문에서 공식의 영어 부분을 찾아 강조한다. 찾는 방식은 어휘 강조(highlightRegex)와 같다 —
+// be동사 변화, 활용형, 불규칙 변화(had·saw·took)까지.
+function highlightGrammar(example, formula) {
+  const text = example || "";
+  const spans = [];
+  for (const term of formulaTerms(formula)) {
+    const re = new RegExp(highlightRegex(term).source, "gi");
+    for (const m of text.matchAll(re)) if (m[0]) spans.push([m.index, m.index + m[0].length]);
+  }
+  spans.sort((a, b) => a[0] - b[0] || b[1] - a[1]);
+  let html = "", at = 0;
+  for (const [i, j] of spans) {
+    if (i < at) continue; // 겹치는 구간은 앞의 것만
+    html += esc(text.slice(at, i)) + "<mark>" + esc(text.slice(i, j)) + "</mark>";
+    at = j;
+  }
+  return html + esc(text.slice(at));
+}
+
+// ---------- 바꿔 말하기 · 헷갈리는 단어 ----------
+// words.related(JSON): AI가 어휘 카드와 함께 만든다. 카드 뒷면에 참고용으로만 보여 준다.
+function relatedOf(w) {
+  try { return w.related ? JSON.parse(w.related) : {}; } catch { return {}; }
+}
+function relatedHtml(w) {
+  const { paraphrases = [], confusables = [] } = relatedOf(w);
+  let html = "";
+  if (confusables.length) {
+    html += `<div class="rel-block conf"><div class="rel-title">헷갈리는 단어</div>` + confusables.map((x) => `
+      <div class="rel-conf" data-say="${esc(x.word)}">
+        <div class="rel-line"><b>${esc(x.word)}</b><span>${esc(x.meaning)}</span></div>
+        ${x.tip ? `<small>${esc(x.tip)}</small>` : ""}
+      </div>`).join("") + "</div>";
+  }
+  if (paraphrases.length) {
+    html += `<div class="rel-block"><div class="rel-title">바꿔 말하기 <span>토익 패러프레이징</span></div><div class="rel-chips">` +
+      paraphrases.map((x) => `<span class="rel-chip" data-say="${esc(x.word)}"><b>${esc(x.word)}</b>${x.meaning ? ` ${esc(x.meaning)}` : ""}</span>`).join("") +
+      "</div></div>";
+  }
+  return html;
 }
 
 function boxLabel(w) {
@@ -432,6 +561,9 @@ const IRREGULAR_VERBS = {
   carry: "carried", seek: "sought", draw: "drew|drawn", fall: "fell|fallen", write: "wrote|written",
   break: "broke|broken", choose: "chose|chosen", rise: "rose|risen", lead: "led", deal: "dealt",
   have: "had|has", do: "did|does|done", say: "said", stand: "stood", catch: "caught",
+  arise: "arose|arisen", become: "became", begin: "began|begun", hear: "heard", feel: "felt",
+  let: "let", know: "knew|known", grow: "grew|grown", show: "shown", understand: "understood",
+  win: "won", build: "built", teach: "taught", forget: "forgot|forgotten", speak: "spoke|spoken",
 };
 const FUNCTION_WORDS = new Set("a an the to in on at by for with of up out off as into onto from over under and or than about".split(" "));
 const PLACEHOLDER = /^(a|b|sb|sth|someone|somebody|something|~|\.\.\.|…)$/i;
@@ -494,8 +626,13 @@ function showCard() {
   const [label, cls] = boxLabel(w);
   $("#card-box").textContent = g ? label.replace("단어", "공식") : label;
   $("#card-box").className = "chip " + (g ? "grammar" : cls);
-  $("#card-pos").textContent = w.pos;
-  $("#card-meaning").textContent = w.meaning;
+  renderCardStar();
+  hideAddSel();
+  const rel = g ? "" : relatedHtml(w);
+  $("#card-related").innerHTML = rel;
+  $("#card-related").hidden = !rel;
+  $("#card-senses").innerHTML = sensesHtml(w);
+  $("#card-senses").classList.toggle("multi", senses(w).length > 1);
   $("#card-example").innerHTML = g ? highlightGrammar(w.example, w.word) : highlight(w.example, w.word);
   $("#card-example-ko").textContent = w.example_ko;
   $(".example").hidden = !w.example;
@@ -503,10 +640,45 @@ function showCard() {
   $("#card-hint").hidden = false;
   $("#progress-text").textContent = `${Math.min(pos + 1, queue.length)}/${queue.length}`;
   $("#progress-bar").style.width = (pos / queue.length) * 100 + "%";
+  $("#btn-undo").disabled = !undoStack.length;
   busy = false;
   // 문법 공식은 한국어 섞인 공식이라 읽지 않는다 (예문만 읽음)
   if ($("#opt-autospeak").checked && !g) speak(w.word);
 }
+
+// ---------- 북마크 ----------
+// 카드·단어장의 별. 누르면 바로 바뀌고(낙관적 갱신) 서버에 저장한다. 실패하면 되돌린다.
+function setStarIcon(btn, on) {
+  btn.classList.toggle("on", on);
+  btn.setAttribute("aria-pressed", on);
+  btn.setAttribute("aria-label", on ? "북마크 해제" : "북마크");
+}
+function renderCardStar() {
+  const w = queue[pos];
+  if (w) setStarIcon($("#card-star"), !!w.starred);
+}
+async function toggleStar(w, after) {
+  const on = !w.starred;
+  // 같은 단어가 여러 곳(세트 끝에 다시 붙은 카드, 단어장 목록)에 있으면 같이 바꾼다
+  const sync = (v) => {
+    for (const x of [...queue, ...allWords]) if (x.id === w.id) x.starred = v;
+    w.starred = v;
+    after?.();
+  };
+  sync(on ? 1 : 0);
+  buzz(on ? 12 : 8);
+  try {
+    await api(`/words/${w.id}/star`, { method: "POST", json: { starred: on } });
+    toast(on ? "북마크에 추가했어요" : "북마크에서 뺐어요");
+  } catch (e) {
+    sync(on ? 0 : 1);
+    toast("북마크 저장 실패: " + e.message);
+  }
+}
+$("#card-star").addEventListener("click", () => {
+  const w = queue[pos];
+  if (w && !busy) toggleStar(w, renderCardStar);
+});
 
 function reveal() {
   if (revealed) return;
@@ -521,24 +693,64 @@ function decide(known) {
   busy = true;
   buzz(known ? 12 : [10, 40, 10]);
   const w = queue[pos];
-  if (!firstTry.has(w.id)) firstTry.set(w.id, known);
-  api(`/words/${w.id}/review`, { method: "POST", json: { known } }).catch((e) => toast("저장 실패: " + e.message));
+  const setFirst = !firstTry.has(w.id);
+  if (setFirst) firstTry.set(w.id, known);
+  // 서버가 넘기기 전 상태(undo)를 돌려준다 — 되돌리기가 그걸 그대로 /undo에 보낸다
+  const saved = api(`/words/${w.id}/review`, { method: "POST", json: { known } })
+    .then((r) => r.undo)
+    .catch((e) => { toast("저장 실패: " + e.message); return null; });
+  undoStack.push({ id: w.id, known, setFirst, saved });
   // 모르는 단어는 이번 세트 끝에 한 번 더 나온다 (산타 토익과 같은 방식).
   if (!known) queue.push({ ...w, seen: w.seen + 1, box: 0, again: true });
   // 넘긴 직후 상태를 저장 — 여기서 앱을 꺼도 다음 카드부터 이어진다
   if (pos + 1 < queue.length) saveSession(pos + 1);
   else clearSession();
 
+  // 버튼·단축키로 넘길 때도 스와이프처럼 도장을 찍고 옆으로 날아가는 게 보이게 한다.
+  // CSS transition은 카드의 enter 애니메이션(fill: both)과 reduced-motion 규칙에 덮여
+  // 바로 다음 카드로 바뀌어 보였다 — Web Animations로 직접 돌리고 끝날 때까지 기다린다.
   const card = $("#card");
-  card.classList.add("fly");
-  card.style.transform = `translateX(${known ? 130 : -130}vw) rotate(${known ? 25 : -25}deg)`;
-  card.style.opacity = 0;
+  card.classList.remove("enter", "back");
+  const side = known ? "know" : "dunno";
+  card.querySelector(`.stamp-${side}`).style.opacity = 1;
+  card.querySelector(`.tint-${side}`).style.opacity = 1;
+  const from = getComputedStyle(card).transform; // 드래그 중이면 손을 뗀 위치에서 출발
+  const dir = known ? 1 : -1;
   speechSynthesis?.cancel();
-  setTimeout(() => {
+  const fly = card.animate([
+    { transform: from === "none" ? "translateX(0) rotate(0deg)" : from },
+    { transform: `translateX(${dir * 130}vw) rotate(${dir * 25}deg)` },
+  ], { duration: 420, easing: "cubic-bezier(.3, 0, .8, .15)", fill: "forwards" });
+  fly.finished.then(() => {
+    fly.cancel(); // showCard가 같은 틱에 새 카드로 바꾸므로 원위치가 화면에 보이지 않는다
     pos++;
     if (pos >= queue.length) finishSet();
     else showCard();
-  }, 260);
+  });
+}
+
+// 방금 넘긴 카드로 돌아간다 — 카드가 나갔던 쪽에서 다시 날아 들어온다. 세트 완료 화면에서도 된다.
+async function undo() {
+  if (busy || !undoStack.length) return;
+  busy = true;
+  buzz(8);
+  const h = undoStack.pop();
+  if (!h.known) queue.pop(); // '모름'으로 세트 끝에 붙였던 카드
+  if (h.setFirst) firstTry.delete(h.id);
+  pos--;
+  const prev = await h.saved;
+  if (prev) api(`/words/${h.id}/undo`, { method: "POST", json: prev }).catch((e) => toast("되돌리기 저장 실패: " + e.message));
+  saveSession(); // 마지막 카드였다면 finishSet이 지운 세트를 다시 만든다
+  setStudyScreen("run");
+  speechSynthesis?.cancel();
+  showCard();
+  const card = $("#card");
+  card.classList.remove("enter");
+  const dir = h.known ? 1 : -1;
+  card.animate([
+    { transform: `translateX(${dir * 130}vw) rotate(${dir * 25}deg)` },
+    { transform: "translateX(0) rotate(0deg)" },
+  ], { duration: 420, easing: "cubic-bezier(.2, .8, .3, 1)" });
 }
 
 function finishSet() {
@@ -546,23 +758,26 @@ function finishSet() {
   const knew = vals.filter(Boolean).length;
   $("#done-text").textContent = `${vals.length}개 중 ${knew}개를 바로 알았어요. 모른 ${vals.length - knew}개는 곧 다시 나와요.`;
   $("#progress-bar").style.width = "100%";
+  $("#btn-done-undo").hidden = !undoStack.length;
   setStudyScreen("done");
 }
 
 // 스와이프 / 탭 처리
 (() => {
   const card = $("#card");
-  let sx = 0, sy = 0, dx = 0, dragging = false, down = false, armed = false;
+  let sx = 0, sy = 0, dx = 0, dragging = false, down = false, armed = false, textHold = false;
   const THRESH = 90;
 
   card.addEventListener("pointerdown", (e) => {
-    if (busy) return;
+    if (busy || e.target.closest(".star-btn")) return;
     down = true; dragging = false; armed = false;
+    // 마우스로 예문을 드래그하면 카드를 넘기지 않고 글자를 고른다 (터치는 꾹 눌러 고른다)
+    textHold = revealed && e.pointerType === "mouse" && !!e.target.closest(".example-en");
     sx = e.clientX; sy = e.clientY; dx = 0;
     card.classList.remove("back");
   });
   card.addEventListener("pointermove", (e) => {
-    if (!down) return;
+    if (!down || textHold || selectedText()) return;
     dx = e.clientX - sx;
     const dy = e.clientY - sy;
     if (!dragging && Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) {
@@ -593,6 +808,9 @@ function finishSet() {
       return;
     }
     // 탭: 뜻을 펼치고, 단어/예문을 눌렀으면 읽어준다
+    if (selectedText()) return; // 예문에서 단어를 고른 것 — 추가 버튼이 대신 뜬다
+    const say = e.target.closest("[data-say]");
+    if (say && revealed) return speak(say.dataset.say); // 헷갈리는 단어·바꿔 말하기
     const target = e.target.closest("[data-speak]");
     const w = queue[pos];
     if (target?.dataset.speak === "example" && revealed) speak(w.example, 0.9);
@@ -602,6 +820,36 @@ function finishSet() {
   card.addEventListener("pointercancel", () => { down = false; if (dragging) snapBack(); });
 })();
 
+// ---------- 예문에서 모르는 단어 추가 ----------
+// 뒤집은 카드의 영어 예문은 글자를 고를 수 있다(꾹 누르기 / 드래그). 고르면 "단어장에 추가" 버튼이 뜨고,
+// 누르면 직접 추가와 같은 AI 채우기 작업으로 넘긴다(사전형·뜻·예문은 AI가, 중복은 서버가 거른다).
+function selectedText() {
+  const sel = getSelection();
+  if (!sel || sel.isCollapsed || !$("#card-example").contains(sel.anchorNode)) return "";
+  let t = sel.toString().replace(/\s+/g, " ").trim().replace(/^[^A-Za-z]+|[^A-Za-z]+$/g, "");
+  if (!t || /[가-힣]/.test(t) || t.split(" ").length > 6 || t.length > 60) return "";
+  // 문장 첫 글자라 대문자인 일반 단어는 소문자로 (Please → please). 약어(HR)는 그대로.
+  if (/^[A-Z][a-z]/.test(t)) t = t[0].toLowerCase() + t.slice(1);
+  return t;
+}
+function hideAddSel() { $("#add-sel").hidden = true; }
+document.addEventListener("selectionchange", () => {
+  const t = $("#study-run").hidden ? "" : selectedText();
+  $("#add-sel").hidden = !t;
+  if (t) $("#add-sel span").textContent = `‘${t}’ 단어장에 추가`;
+});
+$("#add-sel").addEventListener("click", async () => {
+  const t = selectedText();
+  if (!t) return hideAddSel();
+  getSelection().removeAllRanges();
+  hideAddSel();
+  buzz(12);
+  try {
+    await api("/words", { method: "POST", json: { word: t } });
+    toast(`‘${t}’ — AI가 뜻·예문을 채워서 단어장에 넣을게요`);
+  } catch (e) { toast("추가 실패: " + e.message); }
+});
+
 $("#btn-start").addEventListener("click", () => startSet());
 $("#btn-again").addEventListener("click", () => startSet({ fresh: true }));
 $("#btn-new-set").addEventListener("click", () => { clearSession(); startSet({ fresh: true }); });
@@ -610,10 +858,20 @@ $("#btn-home").addEventListener("click", () => closeLayer("study"));
 $("#btn-quit").addEventListener("click", () => closeLayer("study"));
 $("#btn-know").addEventListener("click", () => decide(true));
 $("#btn-dunno").addEventListener("click", () => decide(false));
+$("#btn-undo").addEventListener("click", undo);
+$("#btn-done-undo").addEventListener("click", undo);
 document.addEventListener("keydown", (e) => {
-  if ($("#study-run").hidden || currentView !== "study") return;
-  if (e.key === "ArrowRight") decide(true);
-  else if (e.key === "ArrowLeft") decide(false);
+  if (currentView !== "study" || e.repeat || e.target.closest("input, textarea")) return;
+  // 되돌리기: Backspace · Z · Ctrl/Cmd+Z — 세트 완료 화면에서도
+  const z = e.key === "z" || e.key === "Z";
+  if ((e.key === "Backspace" && !e.ctrlKey && !e.metaKey && !e.altKey) || (z && !e.altKey)) {
+    if (!$("#study-run").hidden || !$("#study-done").hidden) { e.preventDefault(); undo(); }
+    return;
+  }
+  if ($("#study-run").hidden) return;
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.key === "ArrowRight" || e.key === "2") decide(true);
+  else if (e.key === "ArrowLeft" || e.key === "1") decide(false);
   else if (e.key === " ") { e.preventDefault(); reveal(); if (!isGrammar(queue[pos])) speak(queue[pos].word); }
 });
 
@@ -692,10 +950,13 @@ function renderWords() {
     <li data-id="${w.id}">
       <div class="wl-head">
         <div class="wl-text">
-          <div class="wl-word ${isGrammar(w) ? "g" : ""}">${esc(w.word)}</div>
-          <div class="wl-meaning"><span class="pos-s">${esc(w.pos)}</span>${esc(w.meaning)}</div>
+          <div class="wl-word ${isGrammar(w) ? "g" : ""}">${isGrammar(w) ? esc(w.word).replace(/\//g, "/<wbr>") : esc(w.word)}</div>
+          <div class="wl-meaning">${sensesInline(w)}</div>
         </div>
-        ${level(w.box)}
+        <div class="wl-side">
+          <button type="button" class="star-btn wl-star ${w.starred ? "on" : ""}" aria-pressed="${!!w.starred}" aria-label="${w.starred ? "북마크 해제" : "북마크"}"><svg><use href="#i-star"/></svg></button>
+          ${level(w.box)}
+        </div>
       </div>
     </li>`).join("");
 }
@@ -715,6 +976,14 @@ $("#word-list").addEventListener("click", async (e) => {
   const li = e.target.closest("li");
   if (!li) return;
   const w = allWords.find((x) => x.id == li.dataset.id);
+  const star = e.target.closest(".wl-star");
+  if (star) {
+    return toggleStar(w, () => {
+      setStarIcon(star, !!w.starred);
+      // 북마크 목록을 보는 중에 해제하면 목록에서 빠진다
+      if (kindFilter === "starred" && !w.starred) { allWords = allWords.filter((x) => x.starred); renderWords(); }
+    });
+  }
   if (e.target.closest(".wl-head")) {
     const open = li.querySelector(".edit");
     if (open) return open.remove();
@@ -726,9 +995,10 @@ $("#word-list").addEventListener("click", async (e) => {
         </select></label>
         <label>${isGrammar(w) ? "공식" : "단어"}<input name="word" value="${esc(w.word)}"></label>
         <label>품사<input name="pos" value="${esc(w.pos)}"></label>
-        <label>뜻<input name="meaning" value="${esc(w.meaning)}"></label>
+        <label>뜻 <small>품사가 여럿이면 줄을 나누고 둘째 줄부터 [명사] 처럼 품사를 앞에</small><textarea name="meaning" rows="${Math.max(1, senses(w).length)}">${esc(w.meaning)}</textarea></label>
         <label>예문<textarea name="example" rows="2">${esc(w.example)}</textarea></label>
         <label>예문 해석<textarea name="example_ko" rows="2">${esc(w.example_ko)}</textarea></label>
+        ${!isGrammar(w) && w.related ? `<div class="related in-edit">${relatedHtml(w)}</div>` : ""}
         <div class="row">
           <button type="button" class="speak-btn icon-btn" aria-label="발음 듣기"><svg><use href="#i-speaker"/></svg></button>
           <button type="button" class="danger">삭제</button>
@@ -738,6 +1008,8 @@ $("#word-list").addEventListener("click", async (e) => {
     return;
   }
   if (e.target.closest(".speak-btn")) return speak(w.word);
+  const say = e.target.closest("[data-say]");
+  if (say) return speak(say.dataset.say);
   const del = e.target.closest(".danger");
   if (del) {
     armedButton(del, "한 번 더 누르면 삭제", async () => {
@@ -946,7 +1218,14 @@ function hideSplash() {
 })();
 
 // 서비스 워커 등록이 실패하면 대개 폰이 Caddy 루트 인증서를 신뢰하지 않는 경우다 → 앱 설치 불가
+// 앱 설치 안내(인증서) 배너는 '폰에 앱으로 설치하려는' 경우에만 의미가 있다:
+// Android 브라우저 + 아직 설치 안 된 상태 + 이 기기에서 닫은 적 없음. PC 웹에서는 띄우지 않는다.
+function wantsInstallHelp() {
+  const installed = matchMedia("(display-mode: standalone)").matches;
+  return /Android/i.test(navigator.userAgent) && !installed && store("installHelpDismissed") !== "1";
+}
 async function showInstallHelp() {
+  if (!wantsInstallHelp()) return;
   try {
     const { ca_url } = await api("/config");
     if (ca_url) { $("#ca-url").textContent = ca_url; $("#ca-help").hidden = false; }
@@ -955,5 +1234,8 @@ async function showInstallHelp() {
 }
 if (!("serviceWorker" in navigator)) showInstallHelp();
 else navigator.serviceWorker.register("sw.js").catch(showInstallHelp);
-$("#install-help-close").addEventListener("click", () => ($("#install-help").hidden = true));
+$("#install-help-close").addEventListener("click", () => {
+  $("#install-help").hidden = true;
+  store("installHelpDismissed", "1"); // 이 기기에서는 다시 띄우지 않는다
+});
 Promise.race([Promise.all([splashMin, loadStats()]), splashMax]).then(hideSplash);

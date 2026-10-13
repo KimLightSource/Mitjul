@@ -54,6 +54,8 @@ create table if not exists words (
   due_at integer not null default 0,
   seen integer not null default 0,
   known integer not null default 0,
+  starred integer not null default 0,
+  related text not null default '',  -- JSON: 바꿔 말하기·헷갈리는 단어 (어휘만)
   created_at integer not null
 );
 create table if not exists jobs (
@@ -123,6 +125,20 @@ def kst_day(t: int) -> str:
     return time.strftime("%Y-%m-%d", time.gmtime(t + KST))
 
 
+# 복습 날짜는 24시간이 아니라 '학습일' 단위다. 하루는 KST 새벽 6시에 바뀐다 —
+# 어제 오후에 본 1일 뒤 카드도 오늘 아침에 바로 나오고, 새벽 2시에 본 건 전날 공부로 친다.
+DAY_START = 6 * 3600
+
+
+def study_day_start(t: int) -> int:
+    """t가 속한 학습일이 시작된 시각(KST 06:00)."""
+    return (t + KST - DAY_START) // DAY * DAY - KST + DAY_START
+
+
+def due_after(days: int) -> int:
+    return study_day_start(now()) + days * DAY
+
+
 def streak(c) -> int:
     """오늘(없으면 어제)부터 거꾸로 하루도 안 빠지고 학습한 날 수."""
     days = {r[0] for r in c.execute("select day from activity where reviews > 0")}
@@ -143,6 +159,18 @@ with db() as c:
     # 2026-09-30 문법 공식 카드 추가 전에 만들어진 DB 마이그레이션
     if "kind" not in {r[1] for r in c.execute("pragma table_info(words)")}:
         c.execute("alter table words add column kind text not null default 'vocab'")
+    # 2026-10-05 북마크
+    if "starred" not in {r[1] for r in c.execute("pragma table_info(words)")}:
+        c.execute("alter table words add column starred integer not null default 0")
+    # 2026-10-05 바꿔 말하기(패러프레이징)·헷갈리는 단어
+    if "related" not in {r[1] for r in c.execute("pragma table_info(words)")}:
+        c.execute("alter table words add column related text not null default ''")
+    # 2026-10-02 복습 시각을 24시간 단위에서 학습일 단위로 — 예전 due_at을 그날 06:00으로 내린다.
+    # 이미 맞춰진 값은 그대로라 매번 실행해도 안전하다.
+    c.execute(
+        "update words set due_at = (due_at + ?) / ? * ? - ? where (due_at + ?) % ? != 0",
+        (KST - DAY_START, DAY, DAY, KST - DAY_START, KST - DAY_START, DAY),
+    )
 
 app = FastAPI(title="vocab", docs_url=None, redoc_url=None)
 
@@ -156,10 +184,32 @@ class WordIn(BaseModel):
     example: str = ""
     example_ko: str = ""
     kind: str = "vocab"
+    # AI가 어휘 카드와 함께 만든다. 사용자 편집(PUT)에서는 쓰지 않는다.
+    paraphrases: list[dict] = []
+    confusables: list[dict] = []
+
+
+class RelatedIn(BaseModel):
+    """기존 어휘에 바꿔 말하기·헷갈리는 단어를 채우는 작업(job kind 'enrich')의 결과 한 줄."""
+    id: int
+    paraphrases: list[dict] = []
+    confusables: list[dict] = []
 
 
 class ReviewIn(BaseModel):
     known: bool
+
+
+class StarIn(BaseModel):
+    starred: bool
+
+
+class UndoIn(BaseModel):
+    """review가 돌려준 `undo` 그대로 — 넘기기 전 상태와 그때 센 날짜."""
+    box: int
+    due_at: int
+    known: bool
+    day: str
 
 
 class AnswerIn(BaseModel):
@@ -191,6 +241,7 @@ class ResultIn(BaseModel):
     # 작업 탓이 아닌 실패(워커의 claude 인증 만료 등): 시도 횟수를 되돌려 대기열에 남긴다.
     release: bool = False
     grades: list[GradeIn] = []  # 암기 테스트 AI 채점(job kind 'grade') 결과
+    related: list[RelatedIn] = []  # 기존 어휘 채우기(job kind 'enrich') 결과
 
 
 def clean(w: WordIn) -> dict:
@@ -199,6 +250,28 @@ def clean(w: WordIn) -> dict:
     if d["kind"] not in KINDS:
         d["kind"] = "vocab"
     return d
+
+
+# ---------- 바꿔 말하기 · 헷갈리는 단어 ----------
+# words.related = {"paraphrases": [{word, meaning}], "confusables": [{word, meaning, tip}]} (JSON 문자열, 어휘만)
+# 카드 뒷면에 참고용으로만 보여 준다. 헷갈리는 단어를 카드로 만들어 짝으로 묶던 방식은 쉬운 파생어 카드가
+# 수백 개 생겨서 하루 만에 뺐다(2026-10-05, 사용자 결정).
+MAX_PARAPHRASES, MAX_CONFUSABLES = 3, 2
+
+
+def related_json(paraphrases, confusables) -> str:
+    def items(xs, keys, limit):
+        out = []
+        for x in xs if isinstance(xs, list) else []:
+            if not isinstance(x, dict):
+                continue
+            d = {k: " ".join(str(x.get(k) or "").split())[:80] for k in keys}
+            if d["word"] and d["word"].lower() not in {o["word"].lower() for o in out}:
+                out.append(d)
+        return out[:limit]
+    p = items(paraphrases, ("word", "meaning"), MAX_PARAPHRASES)
+    cf = items(confusables, ("word", "meaning", "tip"), MAX_CONFUSABLES)
+    return json.dumps({"paraphrases": p, "confusables": cf}, ensure_ascii=False) if p or cf else ""
 
 
 def job_row(r: sqlite3.Row) -> dict:
@@ -218,26 +291,36 @@ def health():
 
 
 def kind_filter(kind):
-    # 학습 범위: None(섞어서) / vocab(어휘만) / grammar(문법만). SQL 조각과 인자를 돌려준다.
+    """학습 범위: None(섞어서) / vocab(어휘만) / grammar(문법만) / starred(북마크만).
+    SQL 조각과 인자, 그리고 복습일을 따질지를 돌려준다. 북마크는 복습일과 상관없이 전부 낸다 —
+    따로 모아 다시 보려고 찍어 둔 것이라, 복습일이 안 됐다고 빠지면 북마크 학습이 비어 버린다."""
     if kind is None:
-        return "", ()
-    if kind not in ("vocab", "grammar"):
-        raise HTTPException(400, "kind는 vocab 또는 grammar")
-    return " and kind = ?", (kind,)
+        return "", (), True
+    if kind == "starred":
+        return " and starred = 1", (), False
+    if kind not in KINDS:
+        raise HTTPException(400, "kind는 vocab, grammar, starred 중 하나")
+    return " and kind = ?", (kind,), True
 
 
 @app.get("/api/stats")
 def stats(kind: str | None = None):
     t = now()
-    kf, ka = kind_filter(kind)
+    kf, ka, by_due = kind_filter(kind)
     with db() as c:
         q = lambda sql, *a: c.execute(sql, a).fetchone()[0]
         return {
             "total": q("select count(*) from words"),
-            "due": q("select count(*) from words where meaning != '' and due_at <= ?" + kf, t, *ka),
+            "due": q("select count(*) from words where meaning != '' and due_at <= ?" + kf, t if by_due else 2**62, *ka),
+            "starred": q("select count(*) from words where starred = 1"),
             "new": q("select count(*) from words where seen = 0"),
             "mastered": q("select count(*) from words where box >= ?", MASTERED_BOX),
-            "testable": q("select count(*) from words where kind = 'vocab' and meaning != '' and box >= ?", MASTERED_BOX),
+            "testable": q(f"select count(*) from words where {TESTABLE}", MASTERED_BOX, study_day_start(t)),
+            "tested_today": q(f"select count(*) from words where kind = 'vocab' and box >= ? and id in ({TESTED_TODAY})",
+                              MASTERED_BOX, study_day_start(t)),
+            "tests": q("select count(distinct test_id) from test_answers where verdict is not null"),
+            "tests_grading": q("select count(distinct a.test_id) from test_answers a join tests t on t.id = a.test_id "
+                               "where a.verdict = 'pending' and t.finished_at is not null"),
             "jobs_active": q("select count(*) from jobs where status in ('pending','processing')"),
             "today": q("select coalesce(max(reviews),0) from activity where day = ?", kst_day(t)),
             "streak": streak(c),
@@ -247,12 +330,12 @@ def stats(kind: str | None = None):
 @app.get("/api/study")
 def study(limit: int = 20, kind: str | None = None):
     limit = max(1, min(limit, 100))
-    kf, ka = kind_filter(kind)
+    kf, ka, by_due = kind_filter(kind)
     with db() as c:
         rows = c.execute(
             "select * from words where meaning != '' and due_at <= ?" + kf + " "
             "order by due_at, id limit ?",
-            (now(), *ka, limit),
+            (now() if by_due else 2**62, *ka, limit),
         ).fetchall()
     return [dict(r) for r in rows]
 
@@ -281,7 +364,8 @@ def local_grade(answer: str, meaning: str) -> str:
     a = _norm_ko(answer)
     if not a:
         return "wrong"
-    for sense in re.split(r"[,;/]|또는", meaning or ""):
+    # 뜻은 품사별로 줄이 나뉠 수 있다("떠나다\n[명사] 휴가"). [명사] 같은 품사 표시는 _norm_ko가 지운다.
+    for sense in re.split(r"[,;/\n]|또는", meaning or ""):
         m = _norm_ko(sense)
         if not m:
             continue
@@ -313,16 +397,43 @@ def test_view(c, test_id: int) -> dict:
             "grading": any(i["verdict"] == "pending" for i in items) and bool(t["finished_at"])}
 
 
+# 오늘(학습일, KST 06:00부터) 테스트에서 맞힌 단어 — 그날 테스트에서는 다시 내지 않는다.
+# AI 채점을 기다리는 답도 뺀다(오답이 되면 0단계로 내려가 어차피 대상에서 빠진다).
+TESTED_TODAY = (
+    "select a.word_id from test_answers a join tests t on t.id = a.test_id "
+    "where t.created_at >= ? and a.verdict in ('correct', 'pending')"
+)
+TESTABLE = f"kind = 'vocab' and meaning != '' and box >= ? and id not in ({TESTED_TODAY})"
+
+
+@app.get("/api/tests")
+def list_tests(limit: int = 30):
+    """채점 기록: 답한 문항이 있는 시험을 최근 순으로. 채점 중인 시험도 여기서 다시 연다."""
+    limit = max(1, min(limit, 100))
+    with db() as c:
+        rows = c.execute(
+            "select t.id, t.created_at, t.finished_at, count(*) as total, "
+            "sum(a.verdict = 'correct') as correct, sum(a.verdict = 'wrong') as wrong, "
+            "sum(a.verdict = 'pending') as pending, sum(a.verdict = 'error') as error "
+            "from tests t join test_answers a on a.test_id = t.id and a.verdict is not null "
+            "group by t.id order by t.id desc limit ?",
+            (limit,),
+        ).fetchall()
+    return [{**dict(r), "grading": bool(r["finished_at"]) and r["pending"] > 0} for r in rows]
+
+
 @app.post("/api/tests")
 def create_test(limit: int = 20):
     limit = max(1, min(limit, 50))
     t = now()
     with db() as c:
         words = c.execute(
-            "select id from words where kind = 'vocab' and meaning != '' and box >= ? order by random() limit ?",
-            (MASTERED_BOX, limit),
+            f"select id from words where {TESTABLE} order by random() limit ?",
+            (MASTERED_BOX, study_day_start(t), limit),
         ).fetchall()
         if not words:
+            if c.execute("select 1 from words where kind = 'vocab' and box >= ? limit 1", (MASTERED_BOX,)).fetchone():
+                raise HTTPException(409, "오늘은 암기 완료 어휘를 모두 맞혔어요")
             raise HTTPException(409, "암기 완료된 어휘가 없어요")
         tid = c.execute("insert into tests (created_at) values (?)", (t,)).lastrowid
         c.executemany("insert into test_answers (test_id, word_id) values (?, ?)", [(tid, w["id"]) for w in words])
@@ -369,6 +480,10 @@ def finish_test(test_id: int):
         ).fetchall()
         # 끝까지 안 푼 문항은 채점에서 뺀다
         c.execute("delete from test_answers where test_id = ? and verdict is null", (test_id,))
+        if not c.execute("select 1 from test_answers where test_id = ? limit 1", (test_id,)).fetchone():
+            # 한 문제도 안 풀고 나간 시험은 기록에 남기지 않는다
+            c.execute("delete from tests where id = ?", (test_id,))
+            return {"id": test_id, "finished": True, "items": [], "grading": False}
         if rows:
             payload = {"test_id": test_id, "items": [dict(r) for r in rows]}
             c.execute(
@@ -426,21 +541,40 @@ def delete_session():
 @app.post("/api/words/{word_id}/review")
 def review(word_id: int, body: ReviewIn):
     with db() as c:
-        r = c.execute("select box from words where id = ?", (word_id,)).fetchone()
+        r = c.execute("select box, due_at from words where id = ?", (word_id,)).fetchone()
         if not r:
             raise HTTPException(404)
         box = min(r["box"] + 1, len(INTERVALS) - 1) if body.known else 0
-        due = now() + INTERVALS[box] * DAY
+        due = due_after(INTERVALS[box])
         c.execute(
             "update words set box = ?, due_at = ?, seen = seen + 1, known = known + ? where id = ?",
             (box, due, int(body.known), word_id),
         )
+        day = kst_day(now())
         c.execute(
             "insert into activity (day, reviews) values (?, 1) "
             "on conflict(day) do update set reviews = reviews + 1",
-            (kst_day(now()),),
+            (day,),
         )
-    return {"box": box, "due_at": due}
+    # 앱의 되돌리기가 이 값을 그대로 /undo에 보낸다
+    undo = {"box": r["box"], "due_at": r["due_at"], "known": body.known, "day": day}
+    return {"box": box, "due_at": due, "undo": undo}
+
+
+@app.post("/api/words/{word_id}/undo")
+def undo_review(word_id: int, body: UndoIn):
+    """방금 한 review를 무른다 — 단계·복습일을 넘기기 전으로, 횟수와 그날 학습량을 하나 뺀다."""
+    if not 0 <= body.box < len(INTERVALS):
+        raise HTTPException(400, "box 범위 밖")
+    with db() as c:
+        n = c.execute(
+            "update words set box = ?, due_at = ?, seen = max(seen - 1, 0), known = max(known - ?, 0) where id = ?",
+            (body.box, body.due_at, int(body.known), word_id),
+        ).rowcount
+        if not n:
+            raise HTTPException(404)
+        c.execute("update activity set reviews = max(reviews - 1, 0) where day = ?", (body.day,))
+    return {"ok": True}
 
 
 @app.get("/api/words")
@@ -452,6 +586,8 @@ def list_words(q: str = "", kind: str = ""):
     if kind in KINDS:
         sql += " and kind = ?"
         args.append(kind)
+    elif kind == "starred":
+        sql += " and starred = 1"
     with db() as c:
         rows = c.execute(sql + " order by created_at desc, id desc", args).fetchall()
     return [dict(r) for r in rows]
@@ -500,6 +636,15 @@ def edit_word(word_id: int, body: WordIn):
     return {"ok": True}
 
 
+@app.post("/api/words/{word_id}/star")
+def star_word(word_id: int, body: StarIn):
+    with db() as c:
+        n = c.execute("update words set starred = ? where id = ?", (int(body.starred), word_id)).rowcount
+    if not n:
+        raise HTTPException(404)
+    return {"starred": body.starred}
+
+
 @app.delete("/api/words/{word_id}")
 def delete_word(word_id: int):
     with db() as c:
@@ -533,7 +678,7 @@ async def upload(files: list[UploadFile] = File(...)):
 @app.get("/api/jobs")
 def list_jobs():
     with db() as c:
-        rows = c.execute("select * from jobs where kind != 'grade' order by id desc limit 50").fetchall()
+        rows = c.execute("select * from jobs where kind not in ('grade','enrich') order by id desc limit 50").fetchall()
     return [job_row(r) for r in rows]
 
 
@@ -626,6 +771,8 @@ def result(job_id: int, body: ResultIn, x_worker_token: str | None = Header(None
             raise HTTPException(404)
         if r["kind"] == "grade" and not body.error:
             return apply_grades(c, job_id, r, body, t)
+        if r["kind"] == "enrich" and not body.error:
+            return apply_related(c, job_id, body, t)
         if body.error and body.release:
             c.execute(
                 "update jobs set status='pending', attempts=max(attempts-1,0), error=?, updated_at=? where id=?",
@@ -651,18 +798,64 @@ def result(job_id: int, body: ResultIn, x_worker_token: str | None = Header(None
             d = clean(w)
             if not d["word"] or not d["meaning"]:
                 continue
+            rel = related_json(w.paraphrases, w.confusables) if d["kind"] == "vocab" else ""
             cur = c.execute(
-                "insert into words (word,pos,meaning,example,example_ko,kind,source,job_id,due_at,created_at) "
-                "values (?,?,?,?,?,?,?,?,?,?) on conflict(word) do nothing",
-                (*[d[k] for k in WORD_FIELDS], "ai", job_id, t, t),
+                "insert into words (word,pos,meaning,example,example_ko,kind,source,job_id,due_at,created_at,related) "
+                "values (?,?,?,?,?,?,?,?,?,?,?) on conflict(word) do nothing",
+                (*[d[k] for k in WORD_FIELDS], "ai", job_id, t, t, rel),
             )
-            (added if cur.rowcount else dupes).append(d["word"])
+            if cur.rowcount:
+                added.append(d["word"])
+            else:
+                dupes.append(d["word"])
+                # 이미 있는 카드가 아직 비어 있으면 채워 준다
+                if rel:
+                    c.execute("update words set related = ? where word = ? and related = ''", (rel, d["word"]))
         res = {"added": added, "duplicates": dupes, "note": body.note}
         c.execute(
             "update jobs set status='done', error=null, result=?, updated_at=? where id=?",
             (json.dumps(res, ensure_ascii=False), t, job_id),
         )
     return res
+
+
+def apply_related(c, job_id, body, t):
+    """기존 어휘 채우기 결과를 저장한다."""
+    done = 0
+    for it in body.related:
+        rel = related_json(it.paraphrases, it.confusables)
+        if rel:
+            done += c.execute("update words set related = ? where id = ? and kind = 'vocab'", (rel, it.id)).rowcount
+    res = {"added": [], "duplicates": [], "filled": done}
+    c.execute(
+        "update jobs set status='done', error=null, result=?, updated_at=? where id=?",
+        (json.dumps(res, ensure_ascii=False), t, job_id),
+    )
+    return res
+
+
+ENRICH_BATCH = 20
+
+
+@app.post("/api/enrich")
+def enrich():
+    """바꿔 말하기·헷갈리는 단어가 비어 있는 어휘를 ENRICH_BATCH개씩 AI 작업으로 넘긴다.
+    이미 대기 중인 enrich 작업에 들어간 단어는 다시 넣지 않는다."""
+    t = now()
+    with db() as c:
+        queued = set()
+        for (p,) in c.execute("select payload from jobs where kind = 'enrich' and status in ('pending','processing')"):
+            queued.update(i["id"] for i in json.loads(p)["items"])
+        rows = [dict(r) for r in c.execute(
+            "select id, word, pos, meaning from words where kind = 'vocab' and meaning != '' and related = '' order by id"
+        ) if r["id"] not in queued]
+        jobs = []
+        for i in range(0, len(rows), ENRICH_BATCH):
+            payload = json.dumps({"items": rows[i : i + ENRICH_BATCH]}, ensure_ascii=False)
+            jobs.append(c.execute(
+                "insert into jobs (kind,payload,created_at,updated_at) values ('enrich',?,?,?)", (payload, t, t)
+            ).lastrowid)
+    return {"words": len(rows), "jobs": jobs}
 
 
 def apply_grades(c, job_id, job, body, t):

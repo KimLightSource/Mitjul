@@ -113,7 +113,8 @@ Android **Chrome**으로 접속 → 메뉴 → **앱 설치**. (삼성 인터넷
 | `.env` | `VOCAB_PORT` | 호스트 포트 (기본 8000) |
 | `.env` | `VOCAB_CA_CERT`, `VOCAB_CA_URL` | 선택. 사설 CA 공개 인증서 제공·안내 |
 | `worker.env` | `VOCAB_URL`, `VOCAB_WORKER_TOKEN` | 앱 서버 주소와 토큰 |
-| `worker.env` | `VOCAB_MODEL` | 워커가 쓸 모델 (기본 `opus`. `sonnet`은 사진 속 작은 표시를 더 많이 놓친다) |
+| `worker.env` | `VOCAB_MODEL` | 사진 작업 모델 (기본 `opus`. `sonnet`은 사진 속 작은 표시를 더 많이 놓친다) |
+| `worker.env` | `VOCAB_MODEL_TEXT`, `VOCAB_MODEL_GRADE` | 직접 입력·바꿔 말하기 채우기 / 암기 테스트 채점 모델 (기본 둘 다 `sonnet`) |
 
 프롬프트는 `worker/prompt.md`(카드 생성)와 `worker/vocab_worker.py`의 `GRADE_PROMPT`(채점),
 아이콘 생성은 `tools/make-icon.py`.
