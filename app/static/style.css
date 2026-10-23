@@ -15,6 +15,7 @@
   --on-lime: #243300;
   --peach: #ffd9c7;
   --on-peach: #6b2600;
+  --lc: #0a78ab; --lc-soft: #d5effb;  /* LC(듣기) 빈출 표시 */
   --know: #14b86a;
   --dunno: #ff5a5f;
   --blob-a: #b9a8ff;
@@ -52,6 +53,7 @@
   --on-lime: #d6f78f;
   --peach: #5a2a14;
   --on-peach: #ffd2bd;
+  --lc: #82d2f7; --lc-soft: #123a4d;
   --know: #3ddc8f;
   --dunno: #ff7479;
   --blob-a: #3b2c8f;
@@ -81,6 +83,7 @@
     --on-lime: #d6f78f;
     --peach: #5a2a14;
     --on-peach: #ffd2bd;
+    --lc: #82d2f7; --lc-soft: #123a4d;
     --know: #3ddc8f;
     --dunno: #ff7479;
     --blob-a: #3b2c8f;
@@ -308,39 +311,49 @@ h1 { font-family: var(--display); font-size: 34px; line-height: 1.15; font-weigh
 .card.grammar .card-word { font-size: inherit; letter-spacing: normal; line-height: normal; width: 100%; }
 .card.grammar .hint { margin-top: 18px; }
 
-.formula { display: flex; flex-direction: column; align-items: center; gap: 0; width: 100%; }
-.slot {
-  width: min(100%, 300px);
-  display: flex; flex-direction: column; align-items: center; gap: 8px;
-  padding: 14px 18px; border-radius: 20px;
-  background: var(--surface); border: 2px solid var(--line);
-  box-shadow: 0 2px 0 var(--line);
-  animation: slot-in .6s var(--spring) both;
-  animation-delay: calc(var(--i) * 70ms);
+.formula { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; text-align: center; }
+.f-line {
+  display: flex; flex-direction: column; align-items: center; gap: 8px; max-width: 100%;
+  animation: slot-in .6s var(--spring) both; animation-delay: calc(var(--i) * 70ms);
 }
 @keyframes slot-in { from { opacity: 0; transform: translateY(14px) scale(.96); } }
-.slot-main { font-size: clamp(19px, 5.6vw, 23px); font-weight: 800; letter-spacing: -.02em; text-align: center; line-height: 1.25; }
-.slot.en { background: var(--gram); border-color: var(--gram); box-shadow: 0 2px 0 color-mix(in srgb, var(--gram) 60%, #000); }
-.slot.en .slot-main { color: #fff; font-family: var(--display); font-size: clamp(21px, 6.2vw, 26px); }
-.slot-subs { display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; }
-.slot-subs i {
+.f-text {
+  font-size: clamp(20px, 5.8vw, 24px); font-weight: 800; line-height: 1.45; letter-spacing: -.02em;
+  word-break: keep-all; overflow-wrap: anywhere;
+}
+.f-text b { font-family: var(--display); color: var(--gram); font-weight: 800; }
+.f-op { color: var(--muted); font-weight: 700; margin: 0 .12em; }
+.f-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; }
+.f-chips i {
   font-style: normal; font-family: var(--display); font-weight: 700; font-size: 14px;
   padding: 3px 10px; border-radius: 10px; background: var(--gram-soft); color: var(--gram);
 }
-.slot.en .slot-subs i { background: rgba(255, 255, 255, .22); color: #fff; }
-.op {
-  width: 30px; height: 30px; margin: -3px 0; z-index: 1; border-radius: 50%;
-  display: grid; place-items: center; font-weight: 900; font-size: 18px; line-height: 1;
-  background: var(--text); color: var(--surface);
-}
+.f-or { width: 44px; border-top: 2px dashed var(--line); }
 /* 뒷면을 펼치면 공식을 조금 줄인다 */
-.card.grammar.revealed .slot { padding: 10px 16px; gap: 6px; border-radius: 16px; }
-.card.grammar.revealed .slot-main { font-size: 18px; }
-.card.grammar.revealed .slot.en .slot-main { font-size: 20px; }
-.card.grammar.revealed .op { width: 24px; height: 24px; font-size: 15px; }
+.card.grammar.revealed .formula { gap: 6px; }
+.card.grammar.revealed .f-text { font-size: 18px; }
 .card.grammar.revealed .card-front { min-height: 0; padding: 8px 0 4px; }
+/* 출제 유형 박스 (문법 카드 뒷면, 단어장 편집) */
+.exam {
+  text-align: left; padding: 12px 16px; border-radius: 18px;
+  background: var(--surface); border: 2px solid var(--gram-soft);
+}
+.exam-title { font-size: 12px; font-weight: 800; color: var(--gram); margin-bottom: 6px; letter-spacing: .02em; }
+.exam-title span { margin-left: 4px; color: var(--muted); font-weight: 700; }
+.exam-q { margin: 0 0 10px; font-size: 16px; line-height: 1.55; font-weight: 500; }
+.exam-blank {
+  font-weight: 800; color: var(--gram); padding: 0 2px;
+  text-decoration: underline 2px color-mix(in srgb, var(--gram) 45%, transparent); text-underline-offset: 4px;
+}
+.exam-choices { display: flex; flex-wrap: wrap; gap: 6px; }
+.exam-choices span {
+  font-size: 13px; font-weight: 600; padding: 4px 10px; border-radius: 10px;
+  background: var(--surface-2); color: var(--muted);
+}
+.exam-choices span.ok { background: var(--gram); color: #fff; font-weight: 800; }
 /* 핵심 포인트 박스 */
 .card.grammar .meaning-row {
+  align-self: stretch; /* .senses가 가운데 정렬이라 짧은 포인트는 박스가 줄어들었다 */
   display: block; text-align: left;
   background: var(--gram-soft); border-left: 4px solid var(--gram);
   border-radius: 6px 18px 18px 6px; padding: 12px 16px;
@@ -398,6 +411,7 @@ h1 { font-family: var(--display); font-size: 34px; line-height: 1.15; font-weigh
   font-size: 13px; transition: transform .4s var(--spring);
 }
 .rel-chip b { font-weight: 800; }
+.rel-chip.gram { background: var(--gram-soft); color: var(--gram); }
 .related.in-edit { margin-top: 4px; }
 /* 뒤집은 카드의 영어 예문만 글자 선택 허용 — 모르는 단어를 꾹 눌러 단어장에 추가 */
 .card.revealed .example-en { user-select: text; -webkit-user-select: text; }
@@ -748,3 +762,91 @@ body.studying .study-run { height: calc(100dvh - 40px - env(safe-area-inset-top)
 
 /* 띄어쓰기 없는 긴 문자열(공식의 plan/decide/hope/…)이 카드 밖으로 튀어나가지 않게 */
 .wl-word, .tl-word, .job-body .words, .meaning, .slot-main { overflow-wrap: anywhere; }
+
+/* ---------- LC 빈출 ---------- */
+.chip.lc-chip, .card .chip.lc-chip { background: var(--lc-soft); color: var(--lc); }
+.wl-lc { font-family: var(--sans); font-size: 11px; font-weight: 800; color: var(--lc); background: var(--lc-soft); padding: 2px 7px; border-radius: 8px; margin-right: 6px; vertical-align: 3px; }
+.kind-pick { grid-template-columns: repeat(5, 1fr); }
+/* 범위가 6개(자주 모름 추가)라 한 줄에 넣으면 폰에서 글자가 넘친다 — 3개씩 두 줄 */
+.kind-pick { grid-template-columns: repeat(3, 1fr); border-radius: 24px; }
+#kind-filter { display: grid; grid-template-columns: repeat(3, 1fr); }
+/* ---------- 토익 출제 중요도 ---------- */
+.wl-freq { font-family: var(--sans); font-size: 11px; font-weight: 800; padding: 2px 7px; border-radius: 8px; margin-right: 6px; vertical-align: 3px; }
+.wl-freq.f3, .chip.freq-chip.f3, .card .chip.freq-chip.f3 { background: var(--primary); color: var(--on-primary); }
+.wl-freq.f2, .chip.freq-chip.f2, .card .chip.freq-chip.f2 { background: var(--primary-soft); color: var(--on-primary-soft); }
+.wl-freq.f1, .chip.freq-chip.f1, .card .chip.freq-chip.f1 { background: var(--surface-2); color: var(--muted); }
+.sort-btn { margin-left: auto; margin-right: 6px; padding: 6px 12px; border-radius: 16px; font-weight: 700; font-size: 13px; color: var(--muted); background: var(--surface-2); transition: background .2s, color .2s; }
+.sort-btn.on { background: var(--primary); color: var(--on-primary); }
+.wl-miss { font-family: var(--sans); font-size: 11px; font-weight: 800; color: var(--dunno); background: color-mix(in srgb, var(--dunno) 14%, transparent); padding: 2px 7px; border-radius: 8px; margin-right: 6px; vertical-align: 3px; }
+.kind-pick button, .seg button { font-size: 13px; white-space: nowrap; }
+.lc-entry { margin-top: -4px; }
+.lc-icon { background: var(--lc-soft); color: var(--lc); }
+.lc-icon svg, .lc-result-badge svg { width: 24px; height: 24px; }
+#lc-bar { height: 100%; width: 0; border-radius: 5px; background: var(--lc); transition: width .6s var(--spring); }
+.lc-card { width: 100%; min-height: 300px; justify-content: center; text-align: center; cursor: pointer; }
+.lc-card .lc-chip { position: absolute; top: 18px; right: 18px; }
+.lc-card .speak { position: static; }
+.lc-meaning { font-size: 22px; font-weight: 700; animation: back-in .45s var(--spring) both; }
+.lc-card.revealed .hint { visibility: hidden; }
+#lc-result .done-badge { background: var(--lc-soft); color: var(--lc); }
+#lc-result .done-badge svg { width: 52px; height: 52px; }
+#lc-result h2 { margin: 0; font-family: var(--display); font-size: 28px; font-weight: 800; }
+#lc-result p { margin: 0; }
+#lc-result .btn-fab, #lc-result .btn-tonal { align-self: stretch; }
+
+/* ---------- 파트 5 문제 ---------- */
+.quiz-entry { margin-top: -4px; }
+.quiz-icon { background: var(--primary-soft); color: var(--primary); }
+.quiz-icon svg { width: 24px; height: 24px; }
+#quiz-bar { height: 100%; width: 0; border-radius: 5px; background: var(--primary); transition: width .6s var(--spring); }
+.quiz-card { background: var(--surface); border-radius: var(--r-xl); box-shadow: var(--shadow); padding: 20px 20px 24px; }
+.quiz-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.quiz-head b { font-family: var(--display); font-weight: 800; font-size: 20px; color: var(--primary); }
+.quiz-timer { font-family: var(--display); font-weight: 700; font-size: 15px; color: var(--muted); font-variant-numeric: tabular-nums; transition: color .3s; }
+.quiz-timer.slow { color: #e08a00; }
+.quiz-sentence { margin: 0; font-size: 19px; line-height: 1.65; font-weight: 500; overflow-wrap: anywhere; }
+.quiz-sentence.revealed { cursor: pointer; }
+.q-blank { display: inline-block; width: 84px; height: 1em; vertical-align: -3px; margin: 0 3px; border-bottom: 2.5px solid var(--primary); }
+.q-fill { font-weight: 800; padding: 0 2px; text-decoration: underline 2px; text-underline-offset: 4px; }
+.q-fill.ok { color: var(--know); }
+.quiz-choices { display: flex; flex-direction: column; gap: 8px; }
+.quiz-choices button {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  padding: 15px 18px; border-radius: 20px; background: var(--surface); box-shadow: var(--shadow);
+  font-size: 17px; font-weight: 600; overflow-wrap: anywhere;
+  transition: border-radius .45s var(--spring), transform .45s var(--spring), background .2s, color .2s;
+}
+.quiz-choices button b { flex: none; font-family: var(--display); font-weight: 800; color: var(--muted); }
+.quiz-choices button:active:not(:disabled) { border-radius: 12px; transform: scale(.98); }
+.quiz-choices button:disabled { cursor: default; }
+.quiz-choices button.ok { background: color-mix(in srgb, var(--know) 18%, var(--surface)); color: var(--know); box-shadow: 0 0 0 2px var(--know); }
+.quiz-choices button.bad { background: color-mix(in srgb, var(--dunno) 14%, var(--surface)); color: var(--dunno); box-shadow: 0 0 0 2px var(--dunno); }
+.quiz-choices button.ok b, .quiz-choices button.bad b { color: inherit; }
+.quiz-feedback { background: var(--surface); border-radius: var(--r-lg); box-shadow: var(--shadow); padding: 18px; display: flex; flex-direction: column; gap: 10px; animation: back-in .5s var(--spring) both; }
+.quiz-fb-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.quiz-fb-head .verdict { font-size: 19px; }
+.chip.quiz-type { background: var(--primary-soft); color: var(--on-primary-soft); }
+.quiz-explain { margin: 0; font-size: 15px; line-height: 1.6; }
+/* 공식의 plan/decide/hope/… 같은 띄어쓰기 없는 긴 나열이 상자 밖으로 나가지 않게 */
+.quiz-explain, .quiz-ko, .tl-reason, .tl-detail { overflow-wrap: anywhere; }
+.quiz-ko { margin: 0; font-size: 14px; color: var(--muted); line-height: 1.55; }
+.quiz-card-ref { margin: 0; font-size: 13px; color: var(--muted); font-weight: 600; overflow-wrap: anywhere; }
+.quiz-feedback .test-submit { flex: none; align-self: flex-end; width: 160px; margin-top: 4px; }
+.ql-q { font-size: 15px; line-height: 1.55; overflow-wrap: anywhere; }
+.ql-q b { font-family: var(--display); color: var(--primary); }
+#quiz-result .btn-fab, #quiz-result .btn-tonal { align-self: stretch; }
+.quiz-sec { display: flex; flex-direction: column; gap: 6px; padding-top: 10px; border-top: 1px solid var(--line); }
+.quiz-sec-title { font-size: 12px; font-weight: 800; color: var(--primary); letter-spacing: .02em; }
+.quiz-ko { font-size: 15px; color: var(--text); }
+.quiz-structure { display: flex; flex-wrap: wrap; gap: 6px; }
+.qs-part {
+  display: inline-flex; flex-direction: column; gap: 1px; padding: 6px 10px; border-radius: 12px;
+  background: var(--surface-2); font-size: 14px; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere;
+}
+.qs-part small { font-size: 11px; font-weight: 800; color: var(--muted); }
+.qc-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.qc-why { font-size: 13px; font-weight: 500; line-height: 1.45; color: var(--muted); }
+.quiz-choices button.ok .qc-why, .quiz-choices button.bad .qc-why { color: var(--text); opacity: .85; }
+.quiz-choices button:disabled:not(.ok):not(.bad) { opacity: .8; }
+.quiz-choices button { align-items: flex-start; }
+.quiz-choices button b { padding-top: 1px; }

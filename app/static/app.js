@@ -128,8 +128,13 @@ let undoStack = []; // 이번 세트에서 넘긴 순서 — 되돌리기는 뒤
 let revealed = false;
 let busy = false;
 
-// 학습 범위: "" 섞어서 / vocab 어휘만 / grammar 문법만. 기기별로 기억한다.
-const KIND_NAME = { "": "단어가", vocab: "어휘가", grammar: "문법 공식이", starred: "북마크가" };
+// 학습 범위: "" 섞어서 / vocab 어휘만 / grammar 문법만 / starred 북마크 / lc LC 빈출 / missed 자주 모름. 기기별로 기억한다.
+// 자주 모름 = '모름'을 3번 이상 누른 카드(서버의 MISSED_MIN). 북마크처럼 복습일과 상관없이 전부 낸다.
+const KIND_NAME = { "": "단어가", vocab: "어휘가", grammar: "문법 공식이", starred: "북마크가", lc: "LC 빈출 단어가", missed: "자주 모르는 단어가" };
+const misses = (w) => Math.max(0, (w.seen || 0) - (w.known || 0));
+// 토익 출제 중요도(words.freq, AI 판단): 3 필수 · 2 빈출 · 1 가끔 · 0 아직 안 매김(표시 안 함)
+const FREQ_NAME = { 3: "필수", 2: "빈출", 1: "가끔" };
+const freqBadge = (w) => (FREQ_NAME[w.freq] ? `<span class="wl-freq f${w.freq}" title="토익 출제 중요도">${FREQ_NAME[w.freq]}</span>` : "");
 let studyKind = store("studyKind") || "";
 if (!(studyKind in KIND_NAME)) studyKind = "";
 const kindQuery = () => (studyKind ? "&kind=" + studyKind : "");
@@ -324,6 +329,323 @@ $("#test-skip").addEventListener("click", () => submitAnswer(""));
 $("#test-next").addEventListener("click", nextQuestion);
 $("#test-speak").addEventListener("click", () => test && speak(test.items[ti].word));
 
+// ---------- LC 단어 체크 ----------
+// 토익 듣기 빈출 목록(서버의 lc-words.tsv)에서 하루 20개를 낸다. 단어를 읽어 주고 '알아요/모름'만 고른다.
+// 아는 단어는 다시 안 나오고, 모르는 단어는 끝낼 때(중간에 나가도) 한꺼번에 AI 채우기 작업으로 넘어가
+// 'LC' 표시가 붙은 카드로 단어장에 들어간다. 이미 단어장에 있는 단어는 애초에 안 낸다.
+let lc = null; // { items, i, answers: [{word, meaning, known}] }
+
+function renderLcEntry(s) {
+  const left = s.lc_left, today = s.lc_today, daily = s.lc_daily;
+  $("#btn-lc").disabled = !left;
+  $("#lc-entry-sub").textContent = !left
+    ? "목록의 단어를 다 봤어요"
+    : today >= daily
+    ? `오늘 ${today}개 완료 · 더 볼 수 있어요 (남은 ${left}개)`
+    : `오늘 ${today}/${daily} · 모르는 것만 단어장에 (남은 ${left}개)`;
+}
+
+async function startLc() {
+  let r;
+  try {
+    const s = await api("/lc?limit=1");
+    // 오늘 몫(20개)이 남았으면 그만큼, 다 했으면 20개 더
+    const n = s.today < s.daily ? s.daily - s.today : s.daily;
+    r = await api("/lc?limit=" + n);
+  } catch (e) { return toast("불러오기 실패: " + e.message); }
+  if (!r.items.length) return toast("LC 목록의 단어를 다 봤어요");
+  lc = { items: r.items, i: 0, answers: [] };
+  $("#lc-result").hidden = true;
+  $("#lc-q").hidden = false;
+  if ($("#lc-screen").hidden) {
+    $("#lc-screen").hidden = false;
+    document.body.classList.add("studying");
+    openLayer("lc");
+  }
+  showLc();
+}
+
+function showLc() {
+  const it = lc.items[lc.i];
+  $("#lc-word").textContent = it.word;
+  $("#lc-part").textContent = "LC · " + it.part;
+  $("#lc-meaning").textContent = it.meaning;
+  $("#lc-meaning").hidden = true;
+  $("#lc-card").classList.remove("revealed");
+  $("#lc-count").textContent = `${lc.i + 1}/${lc.items.length}`;
+  $("#lc-bar").style.width = (lc.i / lc.items.length) * 100 + "%";
+  $("#lc-undo").disabled = !lc.answers.length;
+  if (accentMode === "mix") rollAccent();
+  speak(it.word); // 듣기 단어라 늘 읽어 준다
+}
+
+function revealLc() {
+  const it = lc.items[lc.i];
+  $("#lc-meaning").hidden = false;
+  $("#lc-card").classList.add("revealed");
+  speak(it.word);
+}
+
+let lcBusy = false;
+async function decideLc(known) {
+  if (!lc || lcBusy || !$("#lc-result").hidden) return;
+  lcBusy = true;
+  const it = lc.items[lc.i];
+  buzz(known ? 12 : [10, 40, 10]);
+  try { await api("/lc/check", { method: "POST", json: { word: it.word, known } }); }
+  catch (e) { lcBusy = false; return toast("저장 실패: " + e.message); }
+  lc.answers.push({ ...it, known });
+  lcBusy = false;
+  if (++lc.i < lc.items.length) return showLc();
+  finishLc();
+}
+
+async function undoLc() {
+  if (!lc || lcBusy || !lc.answers.length) return;
+  lcBusy = true;
+  const last = lc.answers[lc.answers.length - 1];
+  try { await api("/lc/check?word=" + encodeURIComponent(last.word), { method: "DELETE" }); }
+  catch (e) { lcBusy = false; return toast("되돌리기 실패: " + e.message); }
+  lc.answers.pop();
+  lc.i--;
+  lcBusy = false;
+  buzz(8);
+  $("#lc-result").hidden = true;
+  $("#lc-q").hidden = false;
+  showLc();
+}
+
+async function finishLc() {
+  let r = { words: [] };
+  try { r = await api("/lc/finish", { method: "POST" }); } catch (e) { toast("단어장에 넣지 못했어요: " + e.message); }
+  speechSynthesis?.cancel();
+  const unknown = lc.answers.filter((a) => !a.known);
+  $("#lc-bar").style.width = "100%";
+  $("#lc-undo").disabled = true; // 넘긴 뒤에는 되돌리지 않는다
+  $("#lc-q").hidden = true;
+  $("#lc-result").hidden = false;
+  $("#lc-result-title").textContent = `${lc.answers.length}개 중 ${lc.answers.length - unknown.length}개를 알았어요`;
+  $("#lc-result-sub").textContent = r.words.length
+    ? `모르는 ${r.words.length}개는 AI가 뜻·예문을 채워 ‘LC’ 표시와 함께 단어장에 넣어요 (1~2분)`
+    : "모르는 단어가 없어요 🎉";
+  $("#lc-list").innerHTML = unknown.map((a) => `
+    <li><span class="tl-word">${esc(a.word)}</span><span class="tl-chip wrong">모름</span>
+    <span class="tl-detail">${esc(a.meaning)}</span></li>`).join("");
+  try { const s = await api("/lc?limit=1"); $("#lc-more").hidden = !s.left; } catch {}
+  lc.answers = [];
+}
+
+layerClose.lc = async () => {
+  speechSynthesis?.cancel();
+  const midway = lc && !$("#lc-q").hidden && lc.answers.length;
+  lc = null;
+  $("#lc-screen").hidden = true;
+  document.body.classList.remove("studying");
+  // 중간에 나가도 이미 고른 '모름'은 단어장으로 넘긴다
+  if (midway) {
+    try {
+      const r = await api("/lc/finish", { method: "POST" });
+      if (r.words.length) toast(`모르는 ${r.words.length}개를 단어장에 넣는 중이에요`);
+    } catch {}
+  }
+  loadStats();
+};
+$("#btn-lc").addEventListener("click", startLc);
+$("#lc-quit").addEventListener("click", () => closeLayer("lc"));
+$("#lc-close").addEventListener("click", () => closeLayer("lc"));
+$("#lc-more").addEventListener("click", startLc);
+$("#lc-know").addEventListener("click", () => decideLc(true));
+$("#lc-dunno").addEventListener("click", () => decideLc(false));
+$("#lc-undo").addEventListener("click", undoLc);
+$("#lc-card").addEventListener("click", revealLc);
+document.addEventListener("keydown", (e) => {
+  if ($("#lc-screen").hidden || !lc || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.key === "ArrowRight" || e.key === "2") decideLc(true);
+  else if (e.key === "ArrowLeft" || e.key === "1") decideLc(false);
+  else if (e.key === " ") { e.preventDefault(); revealLc(); }
+  else if (e.key === "Backspace" || e.key === "z" || e.key === "Z") { e.preventDefault(); undoLc(); }
+});
+
+// ---------- 파트 5 문제 ----------
+// 단어장 카드로 AI가 새 문장으로 만든 토익 파트 5 빈칸 문제(서버의 문제 은행)를 10개씩 푼다(세트를 열 때 모자라면
+// 서버가 작업을 넣는다). 보기를 고르면 바로 정답과 자세한 해설(해석·문장 구조·정답 해설·보기마다 이유·문장 속 단어)을
+// 보여 주고 기록한다. 틀린 문제의 근거 카드는 서버가 바로 복습할 카드로 돌린다.
+// 번호는 실제 시험처럼 101번부터, 문항마다 걸린 시간을 잰다(파트 5는 한 문제 20초 안팎이 목표).
+const QUIZ_SIZE = 10;
+let quiz = null, quizTimer = null; // { items, i, answers: [{choice, correct, ms}], t0 }
+
+function renderQuizEntry(s) {
+  const acc = s.quiz_answered ? Math.round((s.quiz_correct / s.quiz_answered) * 100) : null;
+  $("#quiz-entry-sub").textContent = s.quiz_left
+    ? `풀 문제 ${s.quiz_left}개${acc !== null ? ` · 정답률 ${acc}%` : " · 내 카드로 만든 빈칸 문제"}${s.quiz_generating ? " · 새 문제 만드는 중" : ""}`
+    : s.quiz_generating ? "AI가 새 문제를 만드는 중이에요 (1~2분)"
+    : "내 카드로 만든 빈칸 문제 10개";
+}
+
+function shuffle(a) {
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// 빈칸 문장. fill이 있으면 빈칸에 채워서(정답은 초록, 틀린 답은 빨강) 보여 준다.
+function blankHtml(q, fill, cls = "") {
+  const [before, after = ""] = q.split(/_{3,}/);
+  const blank = fill == null ? `<span class="q-blank"></span>` : `<span class="q-fill ${cls}">${esc(fill)}</span>`;
+  return esc(before) + blank + esc(after);
+}
+const filledText = (it) => it.q.replace(/_{3,}/, it.answer);
+const fmtSec = (ms) => `${Math.floor(ms / 60000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, "0")}`;
+
+async function startQuiz() {
+  let r;
+  try { r = await api("/quiz?limit=" + QUIZ_SIZE, { method: "POST" }); }
+  catch (e) { loadStats(); return toast(e.message); }
+  quiz = { items: r.items, i: 0, answers: [] };
+  $("#quiz-result").hidden = true;
+  $("#quiz-q").hidden = false;
+  if ($("#quiz-screen").hidden) {
+    $("#quiz-screen").hidden = false;
+    document.body.classList.add("studying");
+    openLayer("quiz");
+  }
+  showQuiz();
+}
+
+function showQuiz() {
+  const it = quiz.items[quiz.i];
+  it.order ??= shuffle([...it.choices]); // 정답 위치는 매번 섞는다
+  $("#quiz-no").textContent = `${101 + quiz.i}.`;
+  $("#quiz-count").textContent = `${quiz.i + 1}/${quiz.items.length}`;
+  $("#quiz-bar").style.width = (quiz.i / quiz.items.length) * 100 + "%";
+  $("#quiz-sentence").innerHTML = blankHtml(it.q);
+  $("#quiz-sentence").classList.remove("revealed");
+  // 보기마다 풀이(detail.why)를 숨겨 두었다가 답을 고르면 보기 아래에 펼친다
+  const why = Object.fromEntries((it.detail?.why || []).map((w) => [w.choice, w.reason]));
+  $("#quiz-choices").innerHTML = it.order.map((c, k) =>
+    `<button data-k="${k}"><b>(${"ABCDE"[k]})</b><span class="qc-body"><span>${esc(c)}</span>` +
+    (why[c] ? `<small class="qc-why" hidden>${esc(why[c])}</small>` : "") + `</span></button>`).join("");
+  $("#quiz-feedback").hidden = true;
+  quiz.t0 = Date.now();
+  const timer = $("#quiz-timer");
+  timer.textContent = "0:00";
+  timer.classList.remove("slow");
+  clearInterval(quizTimer);
+  quizTimer = setInterval(() => {
+    const ms = Date.now() - quiz.t0;
+    timer.textContent = fmtSec(ms);
+    timer.classList.toggle("slow", ms > 30000);
+  }, 1000);
+}
+
+function pickQuiz(k) {
+  if (!quiz || !$("#quiz-feedback").hidden || !$("#quiz-result").hidden) return;
+  const it = quiz.items[quiz.i], choice = it.order[k];
+  if (choice === undefined) return;
+  const ms = Date.now() - quiz.t0, correct = choice === it.answer;
+  clearInterval(quizTimer);
+  quiz.answers[quiz.i] = { choice, correct, ms };
+  buzz(correct ? 12 : [10, 40, 10]);
+  [...$("#quiz-choices").children].forEach((b, j) => {
+    b.disabled = true;
+    const w = b.querySelector(".qc-why");
+    if (w) w.hidden = false;
+    b.classList.toggle("ok", it.order[j] === it.answer);
+    b.classList.toggle("bad", j === k && !correct);
+  });
+  $("#quiz-sentence").innerHTML = blankHtml(it.q, it.answer, "ok");
+  $("#quiz-sentence").classList.add("revealed");
+  const v = $("#quiz-verdict");
+  v.className = "verdict " + (correct ? "correct" : "wrong");
+  v.textContent = correct ? `✓ 정답 · ${fmtSec(ms)}` : `✗ 오답 · 정답 ${it.answer}`;
+  $("#quiz-type").textContent = it.type || (it.kind === "grammar" ? "문법" : "어휘");
+  // 자세한 해설: 해석 → 문장 구조(덩어리마다 역할) → 정답 해설 → 문장 속 단어. 없는 칸은 숨긴다.
+  const d = it.detail || {};
+  $("#quiz-ko").textContent = it.q_ko;
+  $("#quiz-ko-sec").hidden = !it.q_ko;
+  $("#quiz-structure").innerHTML = (d.structure || []).map((x) =>
+    `<span class="qs-part"><small>${esc(x.role)}</small>${esc(x.text)}</span>`).join("");
+  $("#quiz-structure-sec").hidden = !d.structure?.length;
+  $("#quiz-explain").textContent = it.explain;
+  $("#quiz-explain-sec").hidden = !it.explain;
+  $("#quiz-vocab").innerHTML = (d.vocab || []).map((x) =>
+    `<span class="rel-chip" data-say="${esc(x.word)}"><b>${esc(x.word)}</b> ${esc(x.meaning)}</span>`).join("");
+  $("#quiz-vocab-sec").hidden = !d.vocab?.length;
+  $("#quiz-card-ref").textContent = it.card ? `카드 · ${it.card}${correct ? "" : " — 복습할 카드로 보냈어요"}` : "";
+  $("#quiz-card-ref").hidden = !it.card;
+  $("#quiz-feedback").hidden = false;
+  $("#quiz-next").textContent = quiz.i + 1 < quiz.items.length ? "다음" : "결과 보기";
+  $("#quiz-next").focus({ preventScroll: true });
+  $("#quiz-feedback").scrollIntoView({ behavior: "smooth", block: "nearest" });
+  api(`/quiz/${it.id}/answer`, { method: "POST", json: { choice, ms } }).catch((e) => toast("저장 실패: " + e.message));
+}
+
+function nextQuiz() {
+  if (!quiz || $("#quiz-feedback").hidden) return;
+  if (++quiz.i < quiz.items.length) {
+    $(".test-screen:not([hidden])")?.scrollTo({ top: 0 });
+    return showQuiz();
+  }
+  speechSynthesis?.cancel();
+  const done = quiz.answers.filter(Boolean);
+  const correct = done.filter((a) => a.correct).length;
+  const avg = done.length ? done.reduce((n, a) => n + a.ms, 0) / done.length / 1000 : 0;
+  $("#quiz-bar").style.width = "100%";
+  $("#quiz-q").hidden = true;
+  $("#quiz-result").hidden = false;
+  $("#quiz-score").textContent = correct;
+  $("#quiz-score-of").textContent = "/" + done.length;
+  requestAnimationFrame(() => $("#quiz-ring").style.setProperty("--p", done.length ? (correct / done.length) * 100 : 0));
+  const wrong = done.length - correct;
+  $("#quiz-score-sub").textContent = `한 문제 평균 ${avg.toFixed(0)}초` +
+    (wrong ? ` · 틀린 ${wrong}문제의 카드는 복습할 카드로 보냈어요` : " · 모두 맞혔어요 🎉");
+  $("#quiz-list").innerHTML = quiz.items.map((it, n) => {
+    const a = quiz.answers[n];
+    return `<li>
+      <span class="ql-q"><b>${101 + n}.</b> ${blankHtml(it.q, it.answer, "ok")}</span>
+      <span class="tl-chip ${a.correct ? "correct" : "wrong"}">${a.correct ? "정답" : "오답"}</span>
+      <span class="tl-detail">${a.correct ? "" : `내 답 <b>${esc(a.choice)}</b> · `}${esc(it.type || "")} · ${(a.ms / 1000).toFixed(0)}초</span>
+      ${it.q_ko ? `<span class="tl-reason">${esc(it.q_ko)}</span>` : ""}
+      ${it.explain ? `<span class="tl-reason">${esc(it.explain)}</span>` : ""}
+    </li>`;
+  }).join("");
+  $("#quiz-screen").scrollTo({ top: 0 });
+}
+
+layerClose.quiz = () => {
+  clearInterval(quizTimer);
+  speechSynthesis?.cancel();
+  quiz = null;
+  $("#quiz-screen").hidden = true;
+  document.body.classList.remove("studying");
+  loadStats();
+};
+$("#btn-quiz").addEventListener("click", startQuiz);
+$("#quiz-quit").addEventListener("click", () => closeLayer("quiz"));
+$("#quiz-close").addEventListener("click", () => closeLayer("quiz"));
+$("#quiz-more").addEventListener("click", () => { $("#quiz-screen").scrollTo({ top: 0 }); startQuiz(); });
+$("#quiz-next").addEventListener("click", nextQuiz);
+$("#quiz-choices").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-k]");
+  if (b) pickQuiz(+b.dataset.k);
+});
+// 답을 고른 뒤 문장을 누르면 정답을 채운 문장을 읽어 준다
+$("#quiz-vocab").addEventListener("click", (e) => {
+  const c = e.target.closest("[data-say]");
+  if (c) speak(c.dataset.say);
+});
+$("#quiz-sentence").addEventListener("click", () => {
+  if (quiz && !$("#quiz-feedback").hidden) speak(filledText(quiz.items[quiz.i]), 0.9);
+});
+document.addEventListener("keydown", (e) => {
+  if ($("#quiz-screen").hidden || !quiz || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+  const k = "1234".indexOf(e.key) >= 0 ? "1234".indexOf(e.key) : "abcd".indexOf(e.key.toLowerCase());
+  if ($("#quiz-feedback").hidden && e.key.length === 1 && k >= 0) pickQuiz(k);
+  else if (!$("#quiz-feedback").hidden && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); nextQuiz(); }
+});
+
 // ---------- 이어 하기 ----------
 // 진행 중인 세트(카드 순서·위치·처음 결과)는 서버에 저장된다. 카드를 넘길 때마다 저장하고, 세트를
 // 끝까지 마치면 지운다. 앱을 끄거나 ✕로 나가도 홈에서 "이어서 학습"으로 돌아온다(다른 기기에서도).
@@ -368,27 +690,38 @@ async function loadStats() {
     $("#st-mastered").textContent = s.mastered;
     $("#st-streak").textContent = s.streak;
     $("#st-today").textContent = s.today;
+    // 세트는 복습과 새 단어를 쌓인 비율대로 섞어서 낸다 — 다음 세트 구성을 보여 준다
+    const mix = s.mix && s.mix.new + s.mix.review ? s.mix : null;
+    $("#st-mix").hidden = !mix;
+    if (mix) $("#st-mix").innerHTML = `다음 세트 복습 <b>${mix.review}</b> · 새 단어 <b>${mix.new}</b>`;
     // 링: 오늘 넘긴 수 / (넘긴 수 + 남은 복습). 다 끝내면 꽉 찬다.
     const pct = s.today + s.due ? (s.today / (s.today + s.due)) * 100 : 0;
     requestAnimationFrame(() => $("#ring").style.setProperty("--p", pct.toFixed(1)));
     $("#study-empty").hidden = s.due > 0;
     // 북마크 범위는 복습일과 상관없이 북마크 전부를 낸다
-    $(".ring-in span").textContent = studyKind === "starred" ? "북마크" : "복습할 단어";
+    $(".ring-in span").textContent = studyKind === "starred" ? "북마크" : studyKind === "missed" ? "자주 모름" : "복습할 단어";
     $("#study-empty").innerHTML = studyKind === "starred" && s.total
       ? "북마크한 단어가 없어요.<br>카드나 단어장에서 ☆를 눌러 모아 보세요."
+      : studyKind === "missed" && s.total
+      ? "‘모름’을 3번 이상 누른 단어가 아직 없어요."
+      : studyKind === "lc" && !s.lc
+      ? "LC 빈출 단어가 아직 없어요.<br>아래 ‘LC 단어 체크’에서 모르는 단어를 넣어 보세요."
       : studyKind && s.total
       ? `지금 복습할 ${KIND_NAME[studyKind]} 없어요.<br>다른 범위를 골라 보세요.`
       : "지금 복습할 단어가 없어요.<br>추가 탭에서 책 사진을 올려 보세요.";
     $("#study-empty").hidden = s.due > 0 || !!pending;
     renderStartButton(s.due);
     $("#btn-test").disabled = !s.testable;
-    // 오늘 테스트에서 맞힌 단어는 서버가 그날 테스트에서 뺀다(testable에 이미 빠져 있다)
-    const today = s.tested_today ? ` · 오늘 맞힌 ${s.tested_today}개 제외` : "";
+    // 테스트에서 맞힌 단어는 3·7·14·30…일 동안 시험에서 쉰다(testable에 이미 빠져 있다)
+    const next = s.test_next ? new Date(s.test_next * 1000) : null;
+    const nextDay = next ? `${next.getMonth() + 1}/${next.getDate()}` : "";
     $("#test-entry-sub").textContent = s.testable
-      ? `암기 완료 ${s.testable}개 중 최대 ${Math.min(s.testable, TEST_SIZE)}문제${today || " · 뜻 쓰기"}`
-      : s.tested_today ? `오늘은 암기 완료 어휘를 다 맞혔어요 (${s.tested_today}개)`
+      ? `시험 볼 단어 ${s.testable}개 중 최대 ${Math.min(s.testable, TEST_SIZE)}문제${s.test_resting ? ` · 맞힌 ${s.test_resting}개 쉬는 중` : " · 뜻 쓰기"}`
+      : s.test_resting ? `맞힌 ${s.test_resting}개 쉬는 중 · 다음 시험 ${nextDay}`
       : "암기 완료한 단어가 생기면 열려요";
     $("#btn-test-history").hidden = !s.tests;
+    renderLcEntry(s);
+    renderQuizEntry(s);
     $("#test-history-grading").hidden = !s.tests_grading;
   } catch (e) { toast("서버 연결 실패: " + e.message); }
 }
@@ -462,15 +795,49 @@ function parseFormula(text) {
   });
 }
 
+// 공식은 정해진 틀 없이 글자 그대로 보여 준다(2026-10-17 — " + " 칸으로 쪼개니 틀에 안 맞는 공식이 깨졌다).
+//  - " / " (앞뒤 띄어쓰기) → 줄바꿈 (서로 다른 경우: fewer + 복수명사 / less + 불가산명사)
+//  - 괄호 속 "/" 나열 → 그 줄 아래 칩 (사역동사(make/have/let))
+//  - 영어 → 강조색, + → = — → 흐린 연결 기호
+const EN_RUN = /\(?-?[A-Za-z][A-Za-z.'’]*(?:[ (/-]+[A-Za-z][A-Za-z.'’)]*)*\)?(?![A-Za-z가-힣])/g;
+function formulaText(t) {
+  return t.split(/(\s+[+→=—]\s+)/).map((seg) => {
+    if (/^\s+[+→=—]\s+$/.test(seg)) return `<span class="f-op">${esc(seg.trim())}</span>`;
+    let html = "", at = 0;
+    for (const m of seg.matchAll(EN_RUN)) {
+      html += esc(seg.slice(at, m.index)) + `<b>${esc(m[0])}</b>`;
+      at = m.index + m[0].length;
+    }
+    return html + esc(seg.slice(at));
+  }).join("");
+}
+
 function formulaHtml(text) {
-  const parts = parseFormula(text);
-  return '<div class="formula">' + parts.map((p, i) =>
-    (i ? '<div class="op" aria-hidden="true">+</div>' : "") +
-    `<div class="slot ${p.en ? "en" : ""}" style="--i:${i}">` +
-      `<span class="slot-main">${esc(p.main)}</span>` +
-      (p.subs.length ? `<span class="slot-subs">${p.subs.map((x) => `<i>${esc(x)}</i>`).join("")}</span>` : "") +
-    "</div>"
-  ).join("") + "</div>";
+  return '<div class="formula">' + text.split(/\s+\/\s+/).map((line, i) => {
+    const chips = [];
+    const body = line.replace(/\s*\(([^()]*\/[^()]*)\)/g, (_, inner) => {
+      chips.push(...inner.split("/").map((x) => x.trim()).filter(Boolean));
+      return "";
+    });
+    return (i ? '<div class="f-or" aria-hidden="true"></div>' : "") +
+      `<div class="f-line" style="--i:${i}"><div class="f-text">${formulaText(body)}</div>` +
+      (chips.length ? `<div class="f-chips">${chips.map((x) => `<i>${esc(x)}</i>`).join("")}</div>` : "") +
+      "</div>";
+  }).join("") + "</div>";
+}
+
+// 토익 출제 유형(related.exam): 빈칸 문제 + 보기. 빈칸에 정답을 채워 보여 주고, 문장을 누르면 읽어 준다.
+function examHtml(w) {
+  const e = relatedOf(w).exam;
+  if (!e) return "";
+  const [before, after = ""] = e.q.split(/_{3,}/);
+  const filled = before + e.answer + after;
+  const shift = (w.id || 0) % e.choices.length; // 정답이 늘 (A)에 오지 않게 카드마다 돌린다
+  const choices = e.choices.slice(shift).concat(e.choices.slice(0, shift));
+  return `<div class="exam-title">출제 유형 <span>${esc(e.type)}</span></div>
+    <p class="exam-q" data-say="${esc(filled)}">${esc(before)}<span class="exam-blank">${esc(e.answer)}</span>${esc(after)}</p>
+    <div class="exam-choices">${choices.map((c, i) =>
+      `<span class="${c === e.answer ? "ok" : ""}">(${"ABCDE"[i]}) ${esc(c)}</span>`).join("")}</div>`;
 }
 
 // 공식에서 예문 속에 나타날 영어 표현을 뽑는다.
@@ -500,10 +867,11 @@ function formulaTerms(formula) {
 
 // 문법 예문에서 공식의 영어 부분을 찾아 강조한다. 찾는 방식은 어휘 강조(highlightRegex)와 같다 —
 // be동사 변화, 활용형, 불규칙 변화(had·saw·took)까지.
-function highlightGrammar(example, formula) {
+function highlightGrammar(example, formula, terms) {
   const text = example || "";
   const spans = [];
-  for (const term of formulaTerms(formula)) {
+  // AI가 만든 공식 속 단어(related.terms)가 있으면 그것으로, 없으면 공식에서 직접 뽑는다
+  for (const term of terms?.length ? terms.map((t) => t.word) : formulaTerms(formula)) {
     const re = new RegExp(highlightRegex(term).source, "gi");
     for (const m of text.matchAll(re)) if (m[0]) spans.push([m.index, m.index + m[0].length]);
   }
@@ -523,8 +891,14 @@ function relatedOf(w) {
   try { return w.related ? JSON.parse(w.related) : {}; } catch { return {}; }
 }
 function relatedHtml(w) {
-  const { paraphrases = [], confusables = [] } = relatedOf(w);
+  const { paraphrases = [], confusables = [], terms = [] } = relatedOf(w);
   let html = "";
+  // 문법 공식 속 영어 단어의 뜻 (roughly 대략, hardly 거의 ~않다)
+  if (terms.length) {
+    html += `<div class="rel-block"><div class="rel-title">공식 속 단어</div><div class="rel-chips">` +
+      terms.map((x) => `<span class="rel-chip gram" data-say="${esc(x.word)}"><b>${esc(x.word)}</b> ${esc(x.meaning)}</span>`).join("") +
+      "</div></div>";
+  }
   if (confusables.length) {
     html += `<div class="rel-block conf"><div class="rel-title">헷갈리는 단어</div>` + confusables.map((x) => `
       <div class="rel-conf" data-say="${esc(x.word)}">
@@ -563,7 +937,7 @@ const IRREGULAR_VERBS = {
   have: "had|has", do: "did|does|done", say: "said", stand: "stood", catch: "caught",
   arise: "arose|arisen", become: "became", begin: "began|begun", hear: "heard", feel: "felt",
   let: "let", know: "knew|known", grow: "grew|grown", show: "shown", understand: "understood",
-  win: "won", build: "built", teach: "taught", forget: "forgot|forgotten", speak: "spoke|spoken",
+  spring: "sprang|sprung", win: "won", build: "built", teach: "taught", forget: "forgot|forgotten", speak: "spoke|spoken",
 };
 const FUNCTION_WORDS = new Set("a an the to in on at by for with of up out off as into onto from over under and or than about".split(" "));
 const PLACEHOLDER = /^(a|b|sb|sth|someone|somebody|something|~|\.\.\.|…)$/i;
@@ -584,6 +958,8 @@ function tokenPattern(t, single) {
 
 function highlightRegex(word) {
   let toks = word.trim().split(/\s+/);
+  // to 뒤의 do/doing은 동사 자리(be apt to do → are apt to make)라 자리 표시로 본다
+  toks = toks.map((t, k) => (k > 0 && /^to$/i.test(toks[k - 1]) && /^(do|doing)$/i.test(t) ? "~" : t));
   // 앞뒤 자리 표시(furnish A with B의 B)는 강조 범위에서 뺀다
   while (toks.length > 1 && PLACEHOLDER.test(toks[0])) toks.shift();
   while (toks.length > 1 && PLACEHOLDER.test(toks[toks.length - 1])) toks.pop();
@@ -627,13 +1003,20 @@ function showCard() {
   $("#card-box").textContent = g ? label.replace("단어", "공식") : label;
   $("#card-box").className = "chip " + (g ? "grammar" : cls);
   renderCardStar();
+  $("#card-lc").hidden = !w.lc;
+  $("#card-freq").hidden = !FREQ_NAME[w.freq];
+  $("#card-freq").textContent = FREQ_NAME[w.freq] ? `토익 ${FREQ_NAME[w.freq]}` : "";
+  $("#card-freq").className = `chip freq-chip f${w.freq}`;
   hideAddSel();
-  const rel = g ? "" : relatedHtml(w);
+  const rel = relatedHtml(w);
   $("#card-related").innerHTML = rel;
   $("#card-related").hidden = !rel;
   $("#card-senses").innerHTML = sensesHtml(w);
   $("#card-senses").classList.toggle("multi", senses(w).length > 1);
-  $("#card-example").innerHTML = g ? highlightGrammar(w.example, w.word) : highlight(w.example, w.word);
+  $("#card-example").innerHTML = g ? highlightGrammar(w.example, w.word, relatedOf(w).terms) : highlight(w.example, w.word);
+  const exam = g ? examHtml(w) : "";
+  $("#card-exam").innerHTML = exam;
+  $("#card-exam").hidden = !exam;
   $("#card-example-ko").textContent = w.example_ko;
   $(".example").hidden = !w.example;
   $("#card-back").hidden = true;
@@ -810,7 +1193,7 @@ function finishSet() {
     // 탭: 뜻을 펼치고, 단어/예문을 눌렀으면 읽어준다
     if (selectedText()) return; // 예문에서 단어를 고른 것 — 추가 버튼이 대신 뜬다
     const say = e.target.closest("[data-say]");
-    if (say && revealed) return speak(say.dataset.say); // 헷갈리는 단어·바꿔 말하기
+    if (say && revealed) return speak(say.dataset.say); // 헷갈리는 단어·바꿔 말하기·공식 속 단어
     const target = e.target.closest("[data-speak]");
     const w = queue[pos];
     if (target?.dataset.speak === "example" && revealed) speak(w.example, 0.9);
@@ -923,6 +1306,20 @@ auto.addEventListener("change", () => store("autospeak", auto.checked ? "1" : "0
 let allWords = [];
 let searchTimer;
 let kindFilter = "";
+// 단어장 정렬: 기본(최신순, 자주 모름은 모름 많은 순) / 중요도순. 기기별로 기억한다.
+let wordSort = store("wordSort") === "freq" ? "freq" : "";
+function renderWordSort() {
+  $("#words-sort").classList.toggle("on", !!wordSort);
+  $("#words-sort").setAttribute("aria-pressed", !!wordSort);
+}
+renderWordSort();
+$("#words-sort").addEventListener("click", () => {
+  wordSort = wordSort ? "" : "freq";
+  store("wordSort", wordSort);
+  buzz(8);
+  renderWordSort();
+  loadWords();
+});
 
 $("#kind-filter").addEventListener("click", (e) => {
   const b = e.target.closest("button");
@@ -934,7 +1331,7 @@ $("#kind-filter").addEventListener("click", (e) => {
 
 async function loadWords() {
   try {
-    allWords = await api("/words?q=" + encodeURIComponent($("#search").value.trim()) + "&kind=" + kindFilter);
+    allWords = await api("/words?q=" + encodeURIComponent($("#search").value.trim()) + "&kind=" + kindFilter + "&sort=" + wordSort);
   } catch (e) { return toast("불러오기 실패: " + e.message); }
   renderWords();
 }
@@ -950,7 +1347,7 @@ function renderWords() {
     <li data-id="${w.id}">
       <div class="wl-head">
         <div class="wl-text">
-          <div class="wl-word ${isGrammar(w) ? "g" : ""}">${isGrammar(w) ? esc(w.word).replace(/\//g, "/<wbr>") : esc(w.word)}</div>
+          <div class="wl-word ${isGrammar(w) ? "g" : ""}">${kindFilter === "missed" ? `<span class="wl-miss">모름 ${misses(w)}</span>` : ""}${freqBadge(w)}${w.lc ? '<span class="wl-lc">LC</span>' : ""}${isGrammar(w) ? esc(w.word).replace(/\//g, "/<wbr>") : esc(w.word)}</div>
           <div class="wl-meaning">${sensesInline(w)}</div>
         </div>
         <div class="wl-side">
@@ -998,7 +1395,7 @@ $("#word-list").addEventListener("click", async (e) => {
         <label>뜻 <small>품사가 여럿이면 줄을 나누고 둘째 줄부터 [명사] 처럼 품사를 앞에</small><textarea name="meaning" rows="${Math.max(1, senses(w).length)}">${esc(w.meaning)}</textarea></label>
         <label>예문<textarea name="example" rows="2">${esc(w.example)}</textarea></label>
         <label>예문 해석<textarea name="example_ko" rows="2">${esc(w.example_ko)}</textarea></label>
-        ${!isGrammar(w) && w.related ? `<div class="related in-edit">${relatedHtml(w)}</div>` : ""}
+        ${w.related ? `<div class="related in-edit">${isGrammar(w) && examHtml(w) ? `<div class="exam">${examHtml(w)}</div>` : ""}${relatedHtml(w)}</div>` : ""}
         <div class="row">
           <button type="button" class="speak-btn icon-btn" aria-label="발음 듣기"><svg><use href="#i-speaker"/></svg></button>
           <button type="button" class="danger">삭제</button>
@@ -1096,6 +1493,7 @@ async function loadJobs() {
       : `<div class="thumb"><svg><use href="#i-pen"/></svg></div>`;
     let detail = "";
     if (j.kind === "text" && j.status !== "done") detail = esc(j.payload.words.join(", "));
+    if (j.payload?.lc) detail = `<span class="wl-lc">LC 체크</span>` + detail;
     if (j.status === "done") {
       const r = j.result;
       detail = `<b>+${r.added.length}개</b> ${esc(r.added.join(", "))}`;

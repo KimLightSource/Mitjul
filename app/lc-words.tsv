@@ -1,0 +1,513 @@
+# 토익 LC(듣기) 빈출 어휘. 단어<TAB>뜻<TAB>분류. 'LC 단어 체크'가 여기서 하루 20개씩 낸다.
+# 표기를 고치면 이미 체크한 기록(lc_check.word)·단어장 카드와 따로 놀게 되니 뜻·분류만 고친다. 추가는 아무 데나.
+be stacked	(물건이) 쌓여 있다	사진 묘사
+be piled up	쌓여 있다	사진 묘사
+be lined up	줄지어 있다	사진 묘사
+be arranged	정리되어 있다, 배열되어 있다	사진 묘사
+be displayed	진열되어 있다	사진 묘사
+be on display	전시 중이다	사진 묘사
+be propped against	~에 기대어 세워져 있다	사진 묘사
+lean against	~에 기대다	사진 묘사
+be leaning against	~에 기대어 있다	사진 묘사
+be hanging	걸려 있다	사진 묘사
+be mounted on	~에 설치되어 있다, 고정되어 있다	사진 묘사
+be suspended	매달려 있다	사진 묘사
+be scattered	흩어져 있다	사진 묘사
+be placed	놓여 있다	사진 묘사
+be positioned	배치되어 있다	사진 묘사
+be set up	설치되어 있다	사진 묘사
+be unoccupied	비어 있다(자리·방)	사진 묘사
+be vacant	비어 있다	사진 묘사
+be crowded	붐비다	사진 묘사
+be deserted	인적이 없다	사진 묘사
+be parked	주차되어 있다	사진 묘사
+be docked	(배가) 정박해 있다	사진 묘사
+be tied to	~에 묶여 있다	사진 묘사
+be filled with	~로 가득 차 있다	사진 묘사
+be covered with	~로 덮여 있다	사진 묘사
+be shaded	그늘져 있다	사진 묘사
+be under construction	공사 중이다	사진 묘사
+be being repaired	수리되고 있다	사진 묘사
+be being loaded	(짐이) 실리고 있다	사진 묘사
+be lit	불이 켜져 있다	사진 묘사
+be reflected	(물·유리에) 비치다	사진 묘사
+be surrounded by	~에 둘러싸여 있다	사진 묘사
+be secured	고정되어 있다	사진 묘사
+be folded	접혀 있다	사진 묘사
+be rolled up	말려 있다, 걷어 올려져 있다	사진 묘사
+be gathered	모여 있다	사진 묘사
+face each other	서로 마주 보다	사진 묘사
+side by side	나란히	사진 묘사
+in a row	한 줄로, 연이어	사진 묘사
+in rows	여러 줄로	사진 묘사
+in a circle	원을 이루어	사진 묘사
+across from	~의 맞은편에	사진 묘사
+next to each other	서로 나란히	사진 묘사
+overlook	내려다보다	사진 묘사
+lead to	(길이) ~로 이어지다	사진 묘사
+extend	뻗어 있다, 연장하다	사진 묘사
+line	~을 따라 늘어서다	사진 묘사
+border	~에 접하다, 테두리를 이루다	사진 묘사
+stroll	거닐다, 산책하다	사진 묘사
+walk along	~을 따라 걷다	사진 묘사
+step onto	~에 올라서다	사진 묘사
+board	탑승하다	사진 묘사
+get on	(탈것에) 타다	사진 묘사
+get off	(탈것에서) 내리다	사진 묘사
+climb	오르다	사진 묘사
+kneel	무릎을 꿇다	사진 묘사
+bend over	몸을 숙이다	사진 묘사
+lean over	~ 위로 몸을 숙이다	사진 묘사
+reach for	~을 향해 손을 뻗다	사진 묘사
+point at	~을 가리키다	사진 묘사
+hand	건네주다	사진 묘사
+grab	붙잡다	사진 묘사
+lift	들어 올리다	사진 묘사
+carry	나르다, 들고 가다	사진 묘사
+pour	붓다, 따르다	사진 묘사
+sweep	쓸다	사진 묘사
+mop	대걸레로 닦다	사진 묘사
+wipe	닦다	사진 묘사
+rake	갈퀴질하다	사진 묘사
+water	(식물에) 물을 주다	사진 묘사
+trim	다듬다, 손질하다	사진 묘사
+mow	(잔디를) 깎다	사진 묘사
+plant	심다	사진 묘사
+fold	접다	사진 묘사
+hang	걸다	사진 묘사
+mount	설치하다, 올라타다	사진 묘사
+unload	(짐을) 내리다	사진 묘사
+load	(짐을) 싣다	사진 묘사
+stack	쌓다	사진 묘사
+arrange	정리하다, 배열하다	사진 묘사
+rearrange	재배치하다	사진 묘사
+adjust	조정하다, 맞추다	사진 묘사
+examine	살펴보다, 검사하다	사진 묘사
+inspect	점검하다	사진 묘사
+browse	둘러보다	사진 묘사
+try on	입어 보다	사진 묘사
+put on	입다(동작)	사진 묘사
+wear	입고 있다(상태)	사진 묘사
+take off	벗다, 이륙하다	사진 묘사
+remove	치우다, 벗다	사진 묘사
+fasten	매다, 고정하다	사진 묘사
+tie	묶다	사진 묘사
+fix	수리하다, 고정하다	사진 묘사
+assemble	조립하다, 모이다	사진 묘사
+install	설치하다	사진 묘사
+operate	(기계를) 작동하다	사진 묘사
+wheelbarrow	외바퀴 손수레	사진 묘사
+cart	카트, 수레	사진 묘사
+ladder	사다리	사진 묘사
+railing	난간	사진 묘사
+staircase	계단	사진 묘사
+stairway	계단	사진 묘사
+steps	계단	사진 묘사
+pier	부두	사진 묘사
+dock	부두, 선착장	사진 묘사
+harbor	항구	사진 묘사
+shore	해안, 물가	사진 묘사
+fountain	분수	사진 묘사
+lamppost	가로등 기둥	사진 묘사
+awning	(창·입구의) 차양	사진 묘사
+canopy	덮개, 차양	사진 묘사
+pavement	포장도로, 인도	사진 묘사
+walkway	보도, 통로	사진 묘사
+path	길, 오솔길	사진 묘사
+curb	(인도의) 연석	사진 묘사
+intersection	교차로	사진 묘사
+crosswalk	횡단보도	사진 묘사
+lawn	잔디밭	사진 묘사
+bush	관목, 덤불	사진 묘사
+potted plant	화분에 심은 식물	사진 묘사
+vase	꽃병	사진 묘사
+shelf	선반	사진 묘사
+drawer	서랍	사진 묘사
+cabinet	수납장	사진 묘사
+cupboard	찬장	사진 묘사
+counter	계산대, 조리대	사진 묘사
+countertop	조리대 윗면	사진 묘사
+tray	쟁반	사진 묘사
+utensil	(주방) 도구	사진 묘사
+container	용기, 컨테이너	사진 묘사
+crate	(나무) 상자	사진 묘사
+carton	종이 상자	사진 묘사
+pile	더미	사진 묘사
+rack	걸이, 선반	사진 묘사
+clothing rack	옷걸이 대	사진 묘사
+hanger	옷걸이	사진 묘사
+merchandise	상품	사진 묘사
+produce	농산물	사진 묘사
+apron	앞치마	사진 묘사
+safety vest	안전 조끼	사진 묘사
+toolbox	공구함	사진 묘사
+equipment	장비	사진 묘사
+machinery	기계류	사진 묘사
+monitor	모니터, 감시하다	사진 묘사
+podium	연단	사진 묘사
+audience	청중	사진 묘사
+spectator	관중	사진 묘사
+pedestrian	보행자	사진 묘사
+passenger	승객	사진 묘사
+vehicle	차량	사진 묘사
+platform	승강장, 연단	사진 묘사
+luggage	짐, 수하물	사진 묘사
+briefcase	서류 가방	사진 묘사
+patio	테라스	사진 묘사
+balcony	발코니	사진 묘사
+rooftop	옥상	사진 묘사
+doorway	출입구	사진 묘사
+entrance	입구	사진 묘사
+hallway	복도	사진 묘사
+corridor	복도	사진 묘사
+ceiling	천장	사진 묘사
+lobby	로비	사진 묘사
+reception desk	안내 데스크	사무
+receptionist	접수 담당자	사무
+photocopier	복사기	사무
+copier	복사기	사무
+paper jam	종이 걸림	사무
+run out of	~이 떨어지다, 다 쓰다	사무
+out of order	고장 난	사무
+supply cabinet	비품 캐비닛	사무
+office supplies	사무용품	사무
+stationery	문구류	사무
+file cabinet	서류 캐비닛	사무
+document	문서	사무
+paperwork	서류 작업	사무
+spreadsheet	스프레드시트	사무
+figures	수치	사무
+draft	초안	사무
+revise	수정하다	사무
+proofread	교정을 보다	사무
+look over	검토하다, 훑어보다	사무
+go over	검토하다	사무
+take a look at	~을 한번 보다	사무
+fill out	(양식을) 작성하다	사무
+fill in for	~을 대신하다	사무
+cover for	~의 일을 대신 맡다	사무
+sign up for	~에 등록하다, 신청하다	사무
+hand in	제출하다	사무
+turn in	제출하다	사무
+submit	제출하다	사무
+deadline	마감일	사무
+due	~하기로 되어 있는, 마감인	사무
+on time	제시간에	사무
+ahead of schedule	예정보다 앞서	사무
+behind schedule	예정보다 늦게	사무
+workload	업무량	사무
+shift	교대 근무	사무
+work overtime	초과 근무하다	사무
+take a day off	하루 쉬다	사무
+time off	휴가, 쉬는 시간	사무
+leave of absence	휴직	사무
+sick leave	병가	사무
+supervisor	상사, 관리자	사무
+coworker	동료	사무
+colleague	동료	사무
+department	부서	사무
+headquarters	본사	사무
+branch	지점, 지사	사무
+in charge of	~을 담당하는	사무
+be responsible for	~을 책임지다	사무
+be in a meeting	회의 중이다	사무
+extension	내선 번호, 연장	전화·연락
+call back	다시 전화하다	전화·연락
+return a call	회신 전화하다	전화·연락
+get back to	~에게 다시 연락하다	전화·연락
+get in touch with	~와 연락하다	전화·연락
+reach	~에게 연락하다, 도달하다	전화·연락
+leave a message	메시지를 남기다	전화·연락
+voicemail	음성 메시지	전화·연락
+put through	(전화를) 연결해 주다	전화·연락
+hold on	(전화를) 끊지 않고 기다리다	전화·연락
+hang up	전화를 끊다	전화·연락
+follow up	후속 조치하다, 다시 확인하다	전화·연락
+let ~ know	~에게 알려 주다	전화·연락
+contact information	연락처	전화·연락
+forward	(메일을) 전달하다	전화·연락
+attachment	첨부 파일	전화·연락
+memo	회람, 메모	전화·연락
+notify	알리다	전화·연락
+reminder	알림, 상기시키는 것	전화·연락
+agenda	안건	회의·일정
+minutes	회의록	회의·일정
+conference call	전화 회의	회의·일정
+video conference	화상 회의	회의·일정
+brainstorm	아이디어를 모으다	회의·일정
+presentation	발표	회의·일정
+handout	유인물	회의·일정
+projector	프로젝터	회의·일정
+conference room	회의실	회의·일정
+reserve	예약하다	회의·일정
+book	예약하다	회의·일정
+reschedule	일정을 변경하다	회의·일정
+postpone	연기하다	회의·일정
+put off	미루다	회의·일정
+push back	(일정을) 미루다	회의·일정
+move up	(일정을) 앞당기다	회의·일정
+call off	취소하다	회의·일정
+be held	열리다, 개최되다	회의·일정
+take place	개최되다, 일어나다	회의·일정
+set up a meeting	회의를 잡다	회의·일정
+available	시간이 되는, 이용 가능한	회의·일정
+be tied up	몹시 바쁘다	회의·일정
+run late	늦어지다	회의·일정
+schedule conflict	일정이 겹침	회의·일정
+make it	(시간 맞춰) 가다, 참석하다	회의·일정
+attend	참석하다	회의·일정
+show up	나타나다	회의·일정
+in person	직접	회의·일정
+in advance	미리	회의·일정
+right away	즉시	회의·일정
+as soon as possible	가능한 한 빨리	회의·일정
+at the latest	늦어도	회의·일정
+sometime next week	다음 주 중에	회의·일정
+quarterly	분기별의	회의·일정
+annual	연례의	회의·일정
+fiscal year	회계 연도	회의·일정
+budget	예산	회의·일정
+estimate	견적(서), 추정하다	회의·일정
+proposal	제안(서)	회의·일정
+contract	계약(서)	회의·일정
+client	고객	회의·일정
+negotiate	협상하다	회의·일정
+itinerary	여행 일정표	여행·교통
+business trip	출장	여행·교통
+travel arrangements	여행 준비	여행·교통
+accommodation	숙소	여행·교통
+check in	체크인하다, 탑승 수속하다	여행·교통
+check out	체크아웃하다, 확인하다	여행·교통
+boarding pass	탑승권	여행·교통
+gate	탑승구	여행·교통
+departure	출발	여행·교통
+arrival	도착	여행·교통
+delay	지연	여행·교통
+be delayed	지연되다	여행·교통
+layover	경유, 중간 체류	여행·교통
+connecting flight	연결 항공편	여행·교통
+aisle seat	통로 쪽 좌석	여행·교통
+window seat	창가 좌석	여행·교통
+carry-on	기내 반입 가방	여행·교통
+baggage claim	수하물 찾는 곳	여행·교통
+customs	세관	여행·교통
+fare	(교통) 요금	여행·교통
+round-trip	왕복의	여행·교통
+one-way	편도의	여행·교통
+timetable	시간표	여행·교통
+commute	통근하다, 통근	여행·교통
+shuttle bus	셔틀버스	여행·교통
+pick up	데리러 가다, 찾아오다	여행·교통
+drop off	내려 주다, 갖다 놓다	여행·교통
+give ~ a ride	~를 태워 주다	여행·교통
+carpool	카풀하다	여행·교통
+traffic jam	교통 체증	여행·교통
+be stuck in traffic	차가 막혀 꼼짝 못 하다	여행·교통
+detour	우회로	여행·교통
+road work	도로 공사	여행·교통
+directions	길 안내	여행·교통
+get lost	길을 잃다	여행·교통
+parking lot	주차장	여행·교통
+parking permit	주차 허가증	여행·교통
+rental car	렌터카	여행·교통
+tour guide	관광 안내원	여행·교통
+sightseeing	관광	여행·교통
+admission	입장(료)	여행·교통
+brochure	안내 책자	여행·교통
+receipt	영수증	쇼핑·주문
+refund	환불	쇼핑·주문
+exchange	교환하다	쇼핑·주문
+return	반품하다	쇼핑·주문
+in stock	재고가 있는	쇼핑·주문
+out of stock	품절된	쇼핑·주문
+sold out	매진된	쇼핑·주문
+back order	이월 주문	쇼핑·주문
+place an order	주문하다	쇼핑·주문
+order form	주문서	쇼핑·주문
+shipment	배송(품)	쇼핑·주문
+ship	배송하다	쇼핑·주문
+deliver	배달하다	쇼핑·주문
+shipping fee	배송비	쇼핑·주문
+express delivery	특급 배송	쇼핑·주문
+track	추적하다	쇼핑·주문
+package	소포	쇼핑·주문
+warranty	품질 보증(서)	쇼핑·주문
+discount	할인	쇼핑·주문
+on sale	할인 중인, 판매 중인	쇼핑·주문
+price tag	가격표	쇼핑·주문
+in bulk	대량으로	쇼핑·주문
+catalog	카탈로그	쇼핑·주문
+item	물품, 품목	쇼핑·주문
+defective	결함 있는	쇼핑·주문
+damaged	파손된	쇼핑·주문
+cashier	계산원	쇼핑·주문
+pay in cash	현금으로 내다	쇼핑·주문
+invoice	송장, 청구서	쇼핑·주문
+bill	청구서, 계산서	쇼핑·주문
+charge	요금, 청구하다	쇼핑·주문
+membership	회원 자격	쇼핑·주문
+loyalty program	고객 보상 프로그램	쇼핑·주문
+reservation	예약	식당·행사
+make a reservation	예약하다	식당·행사
+party of	~명 일행	식당·행사
+special	(식당의) 특별 요리	식당·행사
+appetizer	전채 요리	식당·행사
+entrée	주요리	식당·행사
+beverage	음료	식당·행사
+refreshments	다과	식당·행사
+catering	출장 요리	식당·행사
+caterer	출장 요리 업체	식당·행사
+banquet	연회	식당·행사
+reception	환영회, 접수처	식당·행사
+luncheon	오찬	식당·행사
+retirement party	은퇴 기념 파티	식당·행사
+farewell party	송별회	식당·행사
+celebrate	축하하다, 기념하다	식당·행사
+award ceremony	시상식	식당·행사
+fundraiser	모금 행사	식당·행사
+exhibition	전시회	식당·행사
+trade show	무역 박람회	식당·행사
+convention	대회, 컨벤션	식당·행사
+workshop	연수회, 워크숍	식당·행사
+seminar	세미나	식당·행사
+keynote speaker	기조연설자	식당·행사
+venue	장소	식당·행사
+registration	등록	식당·행사
+register	등록하다	식당·행사
+sign-up sheet	참가 신청서	식당·행사
+performance	공연, 성과	식당·행사
+intermission	(공연) 중간 휴식	식당·행사
+host	주최하다, 진행자	식당·행사
+volunteer	자원봉사자, 자원하다	식당·행사
+maintenance	유지 보수	시설·수리
+technician	기술자	시설·수리
+repairperson	수리공	시설·수리
+plumber	배관공	시설·수리
+electrician	전기 기사	시설·수리
+leak	새다, 누수	시설·수리
+broken	고장 난	시설·수리
+malfunction	오작동하다	시설·수리
+renovate	개조하다, 보수하다	시설·수리
+renovation	개조, 보수	시설·수리
+remodel	리모델링하다	시설·수리
+replace	교체하다	시설·수리
+heating	난방	시설·수리
+air conditioner	에어컨	시설·수리
+thermostat	온도 조절 장치	시설·수리
+power outage	정전	시설·수리
+facility	시설	시설·수리
+tenant	세입자	시설·수리
+landlord	집주인	시설·수리
+lease	임대 계약, 임대하다	시설·수리
+rent	임대료, 빌리다	시설·수리
+move in	입주하다	시설·수리
+relocate	이전하다	시설·수리
+storage room	창고	시설·수리
+warehouse	창고	시설·수리
+floor plan	평면도	시설·수리
+blueprint	설계도	시설·수리
+contractor	도급업자, 시공사	시설·수리
+inspection	점검	시설·수리
+safety regulations	안전 규정	시설·수리
+job opening	일자리, 공석	인사·채용
+position	직책	인사·채용
+applicant	지원자	인사·채용
+candidate	후보자	인사·채용
+résumé	이력서	인사·채용
+reference	추천서, 추천인	인사·채용
+interview	면접(하다)	인사·채용
+hire	고용하다	인사·채용
+recruit	채용하다	인사·채용
+qualified	자격을 갖춘	인사·채용
+experience	경력, 경험	인사·채용
+orientation	오리엔테이션	인사·채용
+training session	교육 시간	인사·채용
+new employee	신입 사원	인사·채용
+transfer	전근 가다, 옮기다	인사·채용
+promote	승진시키다, 홍보하다	인사·채용
+promotion	승진, 홍보	인사·채용
+retire	은퇴하다	인사·채용
+resign	사임하다	인사·채용
+step down	물러나다	인사·채용
+take over	인수하다, 이어받다	인사·채용
+performance review	인사 고과	인사·채용
+benefits	복리 후생	인사·채용
+salary	급여	인사·채용
+raise	임금 인상	인사·채용
+payroll	급여 대상자 명단, 급여 업무	인사·채용
+human resources	인사부	인사·채용
+personnel	인사과, 직원들	인사·채용
+staff meeting	직원 회의	인사·채용
+advertise	광고하다	마케팅·영업
+advertisement	광고	마케팅·영업
+commercial	광고 방송, 상업의	마케팅·영업
+launch	출시하다	마케팅·영업
+product line	제품군	마케팅·영업
+sales figures	판매 수치	마케팅·영업
+market research	시장 조사	마케팅·영업
+survey	설문 조사	마케팅·영업
+feedback	의견	마케팅·영업
+customer service	고객 서비스	마케팅·영업
+complaint	불만	마케팅·영업
+competitor	경쟁사	마케팅·영업
+merger	합병	마케팅·영업
+expand	확장하다	마케팅·영업
+open a branch	지점을 내다	마케팅·영업
+grand opening	개업, 개장	마케팅·영업
+promotional event	판촉 행사	마케팅·영업
+free sample	무료 샘플	마케팅·영업
+trial period	체험 기간	마케팅·영업
+subscription	구독	마케팅·영업
+supplier	공급업체	마케팅·영업
+vendor	판매업체	마케팅·영업
+manufacturer	제조업체	마케팅·영업
+bank account	은행 계좌	금융·기타
+deposit	예금하다, 보증금	금융·기타
+withdraw	인출하다	금융·기타
+loan	대출	금융·기타
+expense	비용	금융·기타
+reimburse	상환하다, 환급하다	금융·기타
+reimbursement	상환, 환급	금융·기타
+expense report	경비 보고서	금융·기타
+tax	세금	금융·기타
+appointment	약속, 예약	금융·기타
+pharmacy	약국	금융·기타
+prescription	처방전	금융·기타
+clinic	진료소	금융·기타
+due back	반납 예정인	금융·기타
+check out a book	책을 대출하다	금융·기타
+renew	갱신하다	금융·기타
+expire	만료되다	금융·기타
+weather forecast	일기 예보	대화 표현
+be expected to	~할 것으로 예상되다	대화 표현
+announcement	안내 방송, 발표	대화 표현
+attention, please	안내 말씀 드립니다	대화 표현
+in the meantime	그동안에	대화 표현
+by the way	그런데	대화 표현
+I'd be happy to	기꺼이 ~할게요	대화 표현
+That's a good idea	좋은 생각이에요	대화 표현
+Why don't you	~하는 게 어때요	대화 표현
+Would you mind	~해도 될까요, ~해 주시겠어요	대화 표현
+I'm afraid	유감이지만	대화 표현
+Not that I know of	제가 알기로는 아니에요	대화 표현
+It's up to you	당신에게 달렸어요	대화 표현
+I haven't decided yet	아직 못 정했어요	대화 표현
+figure out	알아내다, 이해하다	대화 표현
+come up with	(생각을) 떠올리다	대화 표현
+look into	조사하다	대화 표현
+look forward to	~을 고대하다	대화 표현
+take care of	처리하다, 돌보다	대화 표현
+set up	설치하다, 준비하다	대화 표현
+sort out	해결하다, 정리하다	대화 표현
+put together	준비하다, 조립하다	대화 표현
+hand out	나눠 주다	대화 표현
+drop by	들르다	대화 표현
+stop by	잠깐 들르다	대화 표현
+come by	들르다	대화 표현
+swing by	잠깐 들르다	대화 표현
+head to	~로 향하다	대화 표현
+be supposed to	~하기로 되어 있다	대화 표현
+be about to	막 ~하려 하다	대화 표현
+be out of the office	사무실에 없다	대화 표현
+be on vacation	휴가 중이다	대화 표현
+be on a business trip	출장 중이다	대화 표현

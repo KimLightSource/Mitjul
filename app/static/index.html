@@ -19,7 +19,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&display=swap">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=20261017">
 <link rel="preload" as="image" href="splash-fg.png">
 </head>
 <body>
@@ -39,6 +39,8 @@
   <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z" fill="currentColor"/></symbol>
   <symbol id="i-auto" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17Z" fill="currentColor"/></symbol>
   <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 3.2l2.6 5.5 6 .8-4.4 4.1 1.1 5.9L12 16.6l-5.3 2.9 1.1-5.9-4.4-4.1 6-.8L12 3.2Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+  <symbol id="i-headphones" viewBox="0 0 24 24"><path d="M4 15v-3a8 8 0 0 1 16 0v3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><rect x="3" y="14" width="5" height="7" rx="2" fill="currentColor"/><rect x="16" y="14" width="5" height="7" rx="2" fill="currentColor"/></symbol>
+  <symbol id="i-blank" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 8h8M8 12.5h2.5M13.5 12.5H16M8 17h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
   <symbol id="i-pen" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
 </svg>
 
@@ -69,6 +71,7 @@
         <div class="hero-side">
           <div class="streak"><svg><use href="#i-flame"/></svg><b id="st-streak">0</b>일 연속</div>
           <p class="muted small">오늘 <b id="st-today">0</b>번 넘겼어요</p>
+          <p id="st-mix" class="muted small" hidden></p>
         </div>
       </div>
       <div class="tile tile-new"><b id="st-new">-</b><span>새 단어</span></div>
@@ -81,6 +84,8 @@
       <button data-kind="vocab" role="radio">어휘만</button>
       <button data-kind="grammar" role="radio">문법만</button>
       <button data-kind="starred" role="radio">★ 북마크</button>
+      <button data-kind="lc" role="radio">LC</button>
+      <button data-kind="missed" role="radio">자주 모름</button>
     </div>
     <p id="study-empty" class="empty" hidden></p>
     <button id="btn-start" class="btn-fab"><span id="btn-start-label">학습 시작</span> <svg><use href="#i-cards"/></svg></button>
@@ -97,6 +102,18 @@
         <span id="test-history-grading" class="history-badge" title="AI 채점 중" hidden><span class="pulse"></span></span>
       </button>
     </div>
+    <!-- LC 단어 체크: 듣기 빈출 목록에서 하루 20개 → 모르는 것만 단어장에 -->
+    <button id="btn-lc" class="test-entry lc-entry">
+      <span class="test-entry-icon lc-icon"><svg><use href="#i-headphones"/></svg></span>
+      <span class="test-entry-text"><b>LC 단어 체크</b><small id="lc-entry-sub">듣기 빈출 20개 — 모르는 것만 단어장에</small></span>
+      <span class="test-entry-go">›</span>
+    </button>
+    <!-- 파트 5 문제: 내 카드로 만든 빈칸 4지선다 10문제 -->
+    <button id="btn-quiz" class="test-entry quiz-entry">
+      <span class="test-entry-icon quiz-icon"><svg><use href="#i-blank"/></svg></span>
+      <span class="test-entry-text"><b>파트 5 문제</b><small id="quiz-entry-sub">내 카드로 만든 빈칸 문제 10개</small></span>
+      <span class="test-entry-go">›</span>
+    </button>
   </div>
 
   <div id="study-run" class="study-run" hidden>
@@ -123,6 +140,8 @@
         <div class="card-top">
           <button id="card-star" class="star-btn card-star" aria-label="북마크" aria-pressed="false"><svg><use href="#i-star"/></svg></button>
           <span class="gram-label">문법 공식</span>
+          <span id="card-freq" class="chip freq-chip" hidden></span>
+          <span id="card-lc" class="chip lc-chip" hidden>LC</span>
           <span id="card-accent" class="chip accent-tag" hidden></span>
           <span id="card-box" class="chip"></span>
         </div>
@@ -134,6 +153,7 @@
         </div>
         <div id="card-back" class="card-back" hidden>
           <div id="card-senses" class="senses"></div>
+          <div id="card-exam" class="exam" hidden></div>
           <div class="example" data-speak="example">
             <p id="card-example" class="example-en"></p>
             <p id="card-example-ko" class="example-ko"></p>
@@ -164,6 +184,7 @@
 <section id="view-words" class="view" hidden>
   <header class="page-head">
     <h1>단어장</h1>
+    <button id="words-sort" class="sort-btn" type="button" aria-pressed="false">중요도순</button>
     <span id="words-count" class="count-pill"></span>
   </header>
   <div class="search"><input id="search" type="search" placeholder="단어·공식 또는 뜻 검색"></div>
@@ -172,6 +193,8 @@
     <button data-kind="vocab">어휘</button>
     <button data-kind="grammar">문법 공식</button>
     <button data-kind="starred">★ 북마크</button>
+    <button data-kind="lc">LC</button>
+    <button data-kind="missed">자주 모름</button>
   </div>
   <ul id="word-list" class="word-list"></ul>
 </section>
@@ -266,6 +289,69 @@
   </div>
 </section>
 
+<!-- LC 단어 체크: 빈출 목록 카드 → 알아요 / 모름. 모름은 끝낼 때 AI가 카드로 만들어 단어장에 -->
+<section id="lc-screen" class="test-screen" hidden>
+  <div class="progress-row">
+    <button id="lc-quit" class="icon-btn" aria-label="그만하기"><svg><use href="#i-x"/></svg></button>
+    <div class="progress"><div id="lc-bar"></div></div>
+    <span id="lc-count" class="count">0/0</span>
+    <button id="lc-undo" class="icon-btn" aria-label="되돌리기" title="되돌리기 (Backspace)" disabled><svg><use href="#i-undo"/></svg></button>
+  </div>
+  <div id="lc-q" class="test-q">
+    <button id="lc-card" class="test-card lc-card" type="button">
+      <span class="chip lc-chip" id="lc-part"></span>
+      <span id="lc-word" class="test-word"></span>
+      <span class="speak" aria-hidden="true"><svg><use href="#i-speaker"/></svg></span>
+      <span id="lc-meaning" class="lc-meaning" hidden></span>
+      <span id="lc-hint" class="hint">탭하면 다시 듣고 뜻을 확인해요</span>
+    </button>
+    <div class="swipe-buttons">
+      <button id="lc-dunno" class="choice dunno"><svg><use href="#i-x"/></svg>모름</button>
+      <button id="lc-know" class="choice know"><svg><use href="#i-check"/></svg>알아요</button>
+    </div>
+  </div>
+  <div id="lc-result" class="test-result" hidden>
+    <div class="done-badge"><svg><use href="#i-headphones"/></svg></div>
+    <h2 id="lc-result-title" class="center"></h2>
+    <p id="lc-result-sub" class="muted center"></p>
+    <ul id="lc-list" class="test-list"></ul>
+    <button id="lc-more" class="btn-tonal wide">20개 더</button>
+    <button id="lc-close" class="btn-fab">완료</button>
+  </div>
+</section>
+
+<!-- 파트 5 문제: 빈칸 문장 + 보기 (A)~(D) → 고르면 바로 정답·해설 -->
+<section id="quiz-screen" class="test-screen" hidden>
+  <div class="progress-row">
+    <button id="quiz-quit" class="icon-btn" aria-label="그만하기"><svg><use href="#i-x"/></svg></button>
+    <div class="progress"><div id="quiz-bar"></div></div>
+    <span id="quiz-count" class="count">0/0</span>
+  </div>
+  <div id="quiz-q" class="test-q">
+    <div class="quiz-card">
+      <div class="quiz-head"><b id="quiz-no">101.</b><span id="quiz-timer" class="quiz-timer">0:00</span></div>
+      <p id="quiz-sentence" class="quiz-sentence"></p>
+    </div>
+    <div id="quiz-choices" class="quiz-choices"></div>
+    <div id="quiz-feedback" class="quiz-feedback" hidden>
+      <div class="quiz-fb-head"><span id="quiz-verdict" class="verdict"></span><span id="quiz-type" class="chip quiz-type"></span></div>
+      <div class="quiz-sec" id="quiz-ko-sec"><div class="quiz-sec-title">해석</div><p id="quiz-ko" class="quiz-ko"></p></div>
+      <div class="quiz-sec" id="quiz-structure-sec"><div class="quiz-sec-title">문장 구조</div><div id="quiz-structure" class="quiz-structure"></div></div>
+      <div class="quiz-sec" id="quiz-explain-sec"><div class="quiz-sec-title">정답 해설</div><p id="quiz-explain" class="quiz-explain"></p></div>
+      <div class="quiz-sec" id="quiz-vocab-sec"><div class="quiz-sec-title">문장 속 단어</div><div id="quiz-vocab" class="rel-chips"></div></div>
+      <p id="quiz-card-ref" class="quiz-card-ref"></p>
+      <button id="quiz-next" class="btn-fab test-submit">다음</button>
+    </div>
+  </div>
+  <div id="quiz-result" class="test-result" hidden>
+    <div class="score-ring" id="quiz-ring" style="--p:0"><div><b id="quiz-score">0</b><span id="quiz-score-of"></span></div></div>
+    <p id="quiz-score-sub" class="muted center"></p>
+    <ul id="quiz-list" class="test-list quiz-list"></ul>
+    <button id="quiz-more" class="btn-tonal wide">10문제 더</button>
+    <button id="quiz-close" class="btn-fab">완료</button>
+  </div>
+</section>
+
 <div id="viewer" class="viewer" hidden>
   <div class="viewer-scroll"><img id="viewer-img" alt="올린 책 사진"></div>
   <button id="viewer-close" class="icon-btn viewer-close" aria-label="닫기"><svg><use href="#i-x"/></svg></button>
@@ -280,6 +366,6 @@
 </div>
 
 <div id="toast" class="toast" hidden></div>
-<script src="app.js"></script>
+<script src="app.js?v=20261017"></script>
 </body>
 </html>
