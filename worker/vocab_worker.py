@@ -107,16 +107,28 @@ class Api:
 
 
 def load_formulas():
-    """grammar-formulas.tsv → [(공식, 포인트, 출제 유형 dict 또는 None), ...]"""
+    """grammar-formulas.tsv → [(공식, 포인트, 출제 유형 dict 또는 None, 앞면 단서 dict 또는 None), ...]"""
     out = []
     for line in FORMULAS_FILE.read_text().splitlines():
         if line.strip() and not line.startswith("#"):
             cols = [c.strip() for c in line.split("\t")]
-            exam = None
+            exam = cue = None
             if len(cols) >= 6:
                 exam = clean_exam({"type": cols[2], "q": cols[3], "choices": cols[4].split("|"), "answer": cols[5]})
-            out.append((cols[0], cols[1], exam))
+            if len(cols) >= 8:
+                cue = clean_cue({"front": cols[6], "key": cols[7]})
+            out.append((cols[0], cols[1], exam, cue))
     return out
+
+
+def clean_cue(c):
+    """앞면 단서 {front, key} — front에 가린 자리(?)가 있고 key가 있어야 한다. 아니면 None."""
+    if not isinstance(c, dict):
+        return None
+    cue = {"front": " ".join(str(c.get("front") or "").split()), "key": " ".join(str(c.get("key") or "").split())}
+    if "?" not in cue["front"] or not cue["key"]:
+        return None
+    return cue
 
 
 def clean_exam(e):
@@ -135,11 +147,13 @@ def norm(s):
     return re.sub(r"\s+", "", s or "").lower()
 
 
-def append_formula(formula, point, exam=None):
+def append_formula(formula, point, exam=None, cue=None):
     """새 공식을 grammar-formulas.tsv 끝에 한 줄 추가한다(목록을 영구히 넓힌다)."""
     cols = [formula, point]
-    if exam:
-        cols += [exam["type"], exam["q"], " | ".join(exam["choices"]), exam["answer"]]
+    if exam or cue:
+        cols += [exam["type"], exam["q"], " | ".join(exam["choices"]), exam["answer"]] if exam else [""] * 4
+    if cue:
+        cols += [cue["front"], cue["key"]]
     with FORMULAS_FILE.open("a") as f:
         f.write("\t".join(c.replace("\t", " ").replace("\n", " ") for c in cols) + "\n")
 
@@ -149,7 +163,7 @@ def enforce_formulas(data, formulas):
     없으면 모델이 만든 새 공식을 그대로 받아 목록에 추가한다(2026-10-14, 사용자 요청 — 목록에
     없다고 전부 버려지면 새로 배우는 문법이 하나도 안 쌓였다). 지어낸 규칙 거르기는 프롬프트가
     맡고, 여기서는 형식(단어·뜻이 비어 있지 않은지)만 한 번 더 본다."""
-    by_norm = {norm(f): (f, p, e) for f, p, e in formulas}
+    by_norm = {norm(f[0]): f for f in formulas}
     words, new_formulas = [], []
     for w in data["words"]:
         if w.get("kind") != "grammar":
@@ -164,16 +178,17 @@ def enforce_formulas(data, formulas):
             formula, point = (w.get("word") or "").strip(), (w.get("meaning") or "").strip()
             if not formula or not point:
                 continue  # 형식이 안 맞으면 버린다
-            hit = (formula, point, clean_exam(w.get("exam")))
+            hit = (formula, point, clean_exam(w.get("exam")), clean_cue(w.get("cue")))
             by_norm[norm(formula)] = hit  # 같은 작업에서 또 나와도 새 줄을 중복으로 만들지 않는다
             new_formulas.append(hit)
-        # 출제 유형은 목록 값이 우선(목록에 없으면 모델이 만든 것)
-        words.append({**w, "word": hit[0], "pos": "문법", "meaning": hit[1], "exam": hit[2] or clean_exam(w.get("exam"))})
+        # 출제 유형·앞면 단서는 목록 값이 우선(목록에 없으면 모델이 만든 것)
+        words.append({**w, "word": hit[0], "pos": "문법", "meaning": hit[1], "exam": hit[2] or clean_exam(w.get("exam")),
+                      "cue": hit[3] or clean_cue(w.get("cue"))})
     data["words"] = words
     if new_formulas:
-        for formula, point, exam in new_formulas:
-            append_formula(formula, point, exam)
-        msg = "목록에 없던 새 문법 공식을 추가했습니다: " + ", ".join(f for f, _, _ in new_formulas)
+        for formula, point, exam, cue in new_formulas:
+            append_formula(formula, point, exam, cue)
+        msg = "목록에 없던 새 문법 공식을 추가했습니다: " + ", ".join(f[0] for f in new_formulas)
         data["note"] = f"{data.get('note') or ''} {msg}".strip()
     return data
 
@@ -224,6 +239,26 @@ TERMS_RULES = """- `terms`: 공식에 들어 있는 **영어 단어·표현 각�
   문법 기호는 넣지 않는다. 공식에 영어 단어가 없으면 빈 배열.
 """
 
+# 문법 카드 앞면의 회상 단서(2026-10-27, 사용자 요청 — 공식을 통째로 보여 주면 외웠는지 확인할 수 없어서).
+# 새 공식(prompt.md)과 목록 채우기(tools/grammar_cue_20261027.py)가 같이 쓴다.
+CUE_RULES = """- `cue`: 카드 **앞면의 회상 단서** `{"front": "...", "key": "..."}`. 공부하는 사람이 앞면만 보고 "이 규칙이
+  뭐였지?"를 떠올린 뒤, 뒤집어서 맞았는지 확인할 수 있게 한다. 단어 카드에서 단어를 보고 뜻을 떠올리는 것과 같다.
+  - **무엇을 가리나**: 그 규칙에서 **시험에 나오고 잊기 쉬운 핵심 한 가지**(규칙이 정하는 형태·짝·결과).
+    상황(무엇과 무엇이 만나는지, 빈칸 앞뒤가 어떤지)은 드러내 둔다 — 앞면만 보고 무엇을 떠올려야 하는지 분명해야 한다.
+  - `front`: 공식 표기 방식(" + "로 칸 연결, 괄호 속 대표 단어는 "/"로 나열 — 괄호 안에 " + "나 설명을 넣지 않는다,
+    경우가 둘 이상이면 " / "로 줄을 나눈다)으로 쓰고 **가린 자리는 `?`**. 정답이나 정답을 알려 주는 힌트를 front에 쓰지
+    않는다. 30자 안팎(길어도 50자).
+  - `key`: 가린 핵심 — 뒤집으면 크게 보이는 정답. 25자 안팎. 가린 자리가 여럿이면 순서대로 " / "로 잇는다.
+  - 예:
+    - `사역동사(make/have/let) + 목적어 + 동사원형` → front `사역동사(make/have/let) + 목적어 + ?`, key `동사원형`
+    - `명사 + (주격 관계대명사 + be동사 생략) + 형용사/분사/전치사구` → front `명사 + 주격 관계대명사 + be동사 + 형용사/분사 → ?`,
+      key `관계대명사 + be동사 생략 가능`
+    - `Should + 주어 + 동사원형`(If 생략 도치) → front `If + 주어 + should + 동사원형 → If를 빼면?`, key `Should + 주어 + 동사원형`
+    - `the number of + 복수명사 + 단수동사` → front `the number of + 복수명사 + ?`, key `단수동사`
+    - `전치사 + 명사(구) / 접속사 + 주어 + 동사` → front `? + 명사(구) / ? + 주어 + 동사`, key `전치사 / 접속사`
+    - `동명사 목적어 동사(consider/avoid/finish)` → front `동사(consider/avoid/finish) + ? (목적어)`, key `-ing (동명사)`
+"""
+
 # 토익 출제 중요도(2026-10-23). 새 카드(prompt.md)와 기존 카드 매기기(RANK_PROMPT)가 같이 쓴다.
 FREQ_RULES = """- `freq`: **토익 출제 중요도** 1~3 (정수). 일반 영어에서 얼마나 흔한지·어려운지가 아니라 **토익 시험(LC·RC)에 얼마나
   자주 나오는지**로 매긴다. 비율은 대략 3이 30%, 2가 45%, 1이 25% 안팎이 되게 — 모두 3으로 몰지 않는다.
@@ -271,11 +306,36 @@ JSON 객체 하나만 출력한다. 설명이나 코드 펜스를 붙이지 않�
 """
 
 
+# 품사가 여럿인 어휘 카드의 둘째 줄부터 품사별 예문(2026-10-26, 사용자 요청 — either·besides처럼 품사마다 뜻이 달라서).
+# 새 카드는 prompt.md의 `senses`로 같이 만들고, 기존 카드는 이 프롬프트로 채운다.
+ENRICH_SENSES_PROMPT = """너는 한국인 수험생의 토익(TOEIC) 단어장을 만드는 도우미다. 아래 어휘 카드는 뜻(meaning)이 품사별 줄로
+나뉘어 있다. 첫 줄은 대표 품사(pos)의 뜻이고 이미 예문(example)이 있다. **둘째 줄부터 각 줄**(`[명사] 휴가`처럼
+품사가 앞에 붙은 줄, 옛 형식 `뜻; (명사) 뜻`의 괄호 품사도 같다)마다 그 품사·뜻으로 쓰인 예문을 하나씩 만든다.
+카드의 뜻·품사·첫 예문은 바꾸지 않는다.
+
+- `pos`: 그 줄의 품사(대괄호 없이, 예: "명사").
+- `example`: 그 품사·뜻으로 쓰인 토익 파트 5·6·7 스타일의 자연스러운 새 영어 예문 한 문장(비즈니스 맥락, 10~20단어).
+  표제어를 반드시 포함하고, 첫 줄 예문과 겹치지 않게 쓴다.
+- `example_ko`: 예문의 자연스러운 한국어 번역.
+- 둘째 줄이 없는 카드는 빈 배열.
+
+카드(JSON):
+{items}
+
+JSON 객체 하나만 출력한다. 설명이나 코드 펜스를 붙이지 않는다. 모든 카드에 대해 id를 그대로 써서 한 줄씩:
+{{"related": [{{"id": 1, "senses": [{{"pos": "...", "example": "...", "example_ko": "..."}}]}}]}}
+"""
+
+
 def enrich(job, model):
-    """기존 카드 채우기(job kind 'enrich') → [{id, paraphrases, confusables}] 또는 문법이면 [{id, terms}]"""
-    items = [{"id": i["id"], "word": i["word"], "pos": i["pos"], "meaning": i["meaning"]} for i in job["payload"]["items"]]
+    """기존 카드 채우기(job kind 'enrich') → [{id, paraphrases, confusables}], 문법이면 [{id, terms}],
+    품사별 예문이면(payload.kind 'senses') [{id, senses}]"""
+    keys = ("id", "word", "pos", "meaning", "example")
+    items = [{k: i[k] for k in keys if k in i} for i in job["payload"]["items"]]
     items_json = json.dumps(items, ensure_ascii=False, indent=1)
-    if job["payload"].get("kind") == "grammar":
+    if job["payload"].get("kind") == "senses":
+        prompt = ENRICH_SENSES_PROMPT.format(items=items_json)
+    elif job["payload"].get("kind") == "grammar":
         prompt = ENRICH_GRAMMAR_PROMPT.format(rules=TERMS_RULES, items=items_json)
     else:
         prompt = ENRICH_PROMPT.format(rules=RELATED_RULES, items=items_json)
@@ -334,14 +394,19 @@ def build_prompt(job, image_name, formulas, tiles=()):
             "파란·빨간 표시가 하나도 없으면 words를 빈 배열로 하고 note에 그 사실을 적는다."
         )
     else:
-        words = "\n".join(f"- {w}" for w in job["payload"]["words"])
+        # 입력 항목은 프롬프트 맨 끝에 따로 둔다. 지시문 중간에 짧게 끼워 두었더니 "present", "otherwise" 같은
+        # 흔한 단어를 지시문 속 예시로 읽고 빈 목록을 냈다(2026-10-27).
+        items = job["payload"]["words"]
+        inputs = (f"\n\n## 입력 항목 ({len(items)}개 — 사용자가 실제로 입력한 것, 예시가 아니다)\n\n"
+                  + "\n".join(f"- {w}" for w in items) + "\n")
         task = (
-            "사용자가 직접 입력한 아래 항목 각각에 대해 카드를 만들어라. 단어·숙어면 어휘 항목으로 만든다. "
+            f"사용자가 직접 입력한 항목 {len(items)}개(이 프롬프트 맨 끝 **입력 항목**) 각각에 대해 카드를 만들어라. "
+            "흔한 단어여도 입력한 것이면 모두 카드로 만든다. 단어·숙어면 어휘 항목으로 만든다. "
             "'사역동사 + 목적어 + 동사원형'처럼 문법 규칙이면 아래 **검증된 토익 문법 공식 목록**에서 같거나 "
             "비슷한 공식을 골라 문법 공식 항목으로 만든다. 해당하는 공식이 없으면, 실제로 맞는 토익 문법 "
             "규칙인 경우에만 목록과 같은 표기 방식으로 새 공식을 만들어 추가하고(이 공식은 목록에 편입된다), "
             "지어낸 규칙이거나 틀린 설명이면 만들지 말고 note에 적는다. "
-            f"철자가 틀렸으면 바로잡은 형태로 쓴다.\n\n{words}"
+            "철자가 틀렸으면 바로잡은 형태로 쓴다."
         )
         if job["payload"].get("lc"):
             # 'LC 단어 체크'에서 모른다고 고른 토익 듣기 빈출 표현들
@@ -351,10 +416,10 @@ def build_prompt(job, image_name, formulas, tiles=()):
                 "사진 묘사 표현이면 파트 1처럼 사진을 묘사하는 짧은 문장(\"Some boxes are stacked in a corner.\"), "
                 "그 밖에는 파트 2·3 대화나 파트 4 안내 방송에 나올 법한 자연스러운 구어 문장으로 만든다."
             )
-    listing = "\n".join(f"{i}. {f}  — {p}" for i, (f, p, _) in enumerate(formulas, 1))
+    listing = "\n".join(f"{i}. {f}  — {p}" for i, (f, p, *_) in enumerate(formulas, 1))
     return (template.replace("{TASK}", task).replace("{GRAMMAR_FORMULAS}", listing)
             .replace("{RELATED_RULES}", RELATED_RULES).replace("{TERMS_RULES}", TERMS_RULES)
-            .replace("{FREQ_RULES}", FREQ_RULES))
+            .replace("{FREQ_RULES}", FREQ_RULES).replace("{CUE_RULES}", CUE_RULES)) + (inputs if job["kind"] != "photo" else "")
 
 
 def parse_result(text):
@@ -451,8 +516,34 @@ reason 안에서 단어를 인용할 때는 큰따옴표(") 대신 작은따옴�
 """
 
 
+CONN_GRADE_PROMPT = """너는 한국인 수험생의 토익 연결어(전치사·접속사·접속부사) 시험 채점자다. 각 문항은 영어 표제어,
+그 표제어의 정답 줄 목록(senses: 역할 pos, 뜻 meaning, 그 역할·뜻으로 쓰인 예문 example과 번역 example_ko),
+학습자의 답(answer: 역할 → 학습자가 적은 뜻)이다. 역할(품사)은 이미 정확히 맞는 것만 여기 왔다. **뜻**만 판정한다.
+
+senses의 **모든 줄**을 하나씩 본다. 그 줄 역할 칸(answer[pos])에 적힌 뜻 가운데 하나가 아래 둘 중 하나면 그 줄은 맞다:
+1. 그 줄의 뜻과 같거나 동의어·비슷한 표현이다(쉼표로 나열된 것 중 하나만 맞아도 된다). 어미 차이·맞춤법 실수는 봐준다.
+2. 다른 줄에 적힌 뜻이거나 사전 뜻이라도, 그 줄의 **예문 번역(example_ko)에 그 뜻을 넣어 읽었을 때 문장의 뜻이 그대로이고
+   자연스러우면** 맞다. 예: accordingly의 부사 줄(그에 맞게, 그에 따라 — "adjust your budget accordingly")에 '따라서'를 적었어도,
+   "예산을 그에 따라 조정하라"와 뜻이 같게 읽히면 맞다. 접속부사·부사처럼 뜻이 사실상 같은 줄끼리 섞어 적은 것은 이렇게 봐준다.
+그렇지 않으면 그 줄은 틀리다 — 예문에 넣으면 문장의 뜻이 바뀌거나(문법적으로 말은 되어도 다른 뜻이면 틀림) 어색한 경우,
+너무 막연한 경우(예: '연결'). 예: since의 부사절 접속사 줄이 '~ 때문에'와 '~한 이후로' 둘인데 '때문에'만 적었으면, '~한 이후로'
+줄의 예문("2018년 입사한 이후로 영업부에서 일했다")에 '때문에'를 넣으면 뜻이 바뀌므로 그 줄은 틀리다.
+**한 줄이라도 틀리면 그 문항은 오답**이다.
+
+문항(JSON):
+{items}
+
+JSON 객체 하나만 출력한다. 설명이나 코드 펜스를 붙이지 않는다. reason은 한국어 한 문장(오답이면 어느 역할의 어떤 뜻이
+빠졌거나 틀렸는지)이고, reason 안에서 인용할 때는 큰따옴표(") 대신 작은따옴표(')만 쓴다:
+{{"results": [{{"aid": 1, "correct": true, "reason": "..."}}]}}
+"""
+
+
 def grade(job, model):
-    """암기 테스트 AI 채점(job kind 'grade') → [{aid, correct, reason}]"""
+    """암기 테스트 AI 채점(job kind 'grade') → [{aid, correct, reason}]. 연결어 테스트(payload.kind 'conn')도 같은 형식."""
+    if job["payload"].get("kind") == "conn":
+        items = [{k: i[k] for k in ("aid", "word", "senses", "answer")} for i in job["payload"]["items"]]
+        return parse_grades(run_claude(CONN_GRADE_PROMPT.format(items=json.dumps(items, ensure_ascii=False, indent=1)), model))
     items = [{"aid": i["aid"], "word": i["word"], "pos": i["pos"], "meaning": i["meaning"], "answer": i["answer"]}
              for i in job["payload"]["items"]]
     text = run_claude(GRADE_PROMPT.format(items=json.dumps(items, ensure_ascii=False, indent=1)), model)

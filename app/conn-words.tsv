@@ -1,0 +1,140 @@
+# 연결어 스페셜 테스트 목록 (2026-10-27). 표제어<TAB>역할<TAB>뜻<TAB>예문<TAB>예문 번역 — 역할(뜻)마다 한 줄, 표제어가 여러 줄이면 전부 맞혀야 정답.
+# 역할 이름: 전치사 / 부사절 접속사 / 명사절 접속사 / 접속부사 / 등위접속사 / 상관접속사 / 부사 (앱의 CONN_ROLES와 같아야 한다)
+despite	전치사	~에도 불구하고	Despite the heavy rain, the outdoor product launch was held as scheduled.	폭우에도 불구하고 야외 제품 출시 행사는 예정대로 열렸다.
+in spite of	전치사	~에도 불구하고	In spite of rising material costs, the company kept its prices unchanged this year.	자재 비용 상승에도 불구하고 그 회사는 올해 가격을 동결했다.
+notwithstanding	전치사	~에도 불구하고	Notwithstanding the recent delays, the construction project is expected to finish on time.	최근의 지연에도 불구하고 그 건설 프로젝트는 제때 끝날 것으로 예상된다.
+although	부사절 접속사	비록 ~이지만	Although the product was expensive, it sold out within a week of its release.	그 제품은 비쌌지만 출시 일주일 만에 매진되었다.
+even though	부사절 접속사	비록 ~이지만	Even though sales were low in March, the company met its quarterly target.	3월 매출은 저조했지만 회사는 분기 목표를 달성했다.
+though	부사절 접속사	비록 ~이지만	Though the hotel is small, it offers excellent service and comfortable rooms.	그 호텔은 작지만 훌륭한 서비스와 편안한 객실을 제공한다.
+though	부사	그렇지만, 그래도 (주로 문장 끝)	The new printer is a bit slow; it is very reliable, though.	새 프린터는 좀 느리다. 그래도 매우 믿을 만하다.
+because	부사절 접속사	~ 때문에	The meeting was postponed because several board members were away on business.	이사 몇 명이 출장 중이어서 회의가 연기되었다.
+because of	전치사	~ 때문에	The flight to Chicago was canceled because of severe weather conditions at the airport.	공항의 악천후 때문에 시카고행 항공편이 취소되었다.
+due to	전치사	~ 때문에	Due to scheduled maintenance, the company Web site will be unavailable on Saturday morning.	정기 점검 때문에 토요일 오전에는 회사 웹사이트를 이용할 수 없다.
+owing to	전치사	~ 때문에	Owing to high demand, the new laptop model is currently out of stock in most stores.	높은 수요 때문에 새 노트북 모델은 현재 대부분의 매장에서 품절이다.
+thanks to	전치사	~ 덕분에	Thanks to the new software, employees can now process orders much more quickly.	새 소프트웨어 덕분에 직원들은 이제 주문을 훨씬 더 빨리 처리할 수 있다.
+as a result of	전치사	~의 결과로	As a result of the merger, several departments will be relocated to the main office.	합병의 결과로 여러 부서가 본사로 이전될 것이다.
+since	부사절 접속사	~ 때문에	Since the manager is out of town, the meeting will be held next week.	관리자가 출장 중이기 때문에 회의는 다음 주에 열릴 것이다.
+since	부사절 접속사	~한 이후로	Mr. Kim has worked in the sales department since he joined the company in 2018.	김 씨는 2018년에 입사한 이후로 영업부에서 일해 왔다.
+since	전치사	~ 이후로	Sales have increased steadily since the launch of the new advertising campaign.	새 광고 캠페인 시작 이후로 매출이 꾸준히 증가했다.
+as	부사절 접속사	~ 때문에	As the original speaker is ill, Dr. Lee will give the keynote address.	원래 연사가 아파서 이 박사가 기조연설을 할 것이다.
+as	부사절 접속사	~할 때, ~하면서, ~함에 따라	As the company grows, it will need to hire more customer service staff.	회사가 성장함에 따라 더 많은 고객 서비스 직원을 고용해야 할 것이다.
+as	부사절 접속사	~처럼, ~대로	As we discussed at the meeting, the budget will be finalized next week.	회의에서 논의한 대로 예산은 다음 주에 확정될 것이다.
+as	전치사	~로서	Ms. Park will serve as the interim director until a replacement is found.	후임자가 정해질 때까지 박 씨가 임시 이사로서 일할 것이다.
+during	전치사	~ 동안	Please turn off all mobile phones during the performance in the main auditorium.	대강당 공연 동안에는 모든 휴대전화를 꺼 주십시오.
+while	부사절 접속사	~하는 동안	Please do not use your phone while you are driving a company vehicle.	회사 차량을 운전하는 동안에는 전화를 사용하지 마십시오.
+while	부사절 접속사	~인 반면에, ~이지만	While the first model is cheaper, the second one is more energy efficient.	첫 번째 모델이 더 저렴한 반면에 두 번째 모델은 에너지 효율이 더 높다.
+until	전치사	~까지 (계속)	The library will be closed until next Monday for renovations.	도서관은 보수 공사로 다음 주 월요일까지 휴관한다.
+until	부사절 접속사	~할 때까지	Please wait in the lobby until your name is called by the receptionist.	접수 담당자가 이름을 부를 때까지 로비에서 기다려 주십시오.
+by	전치사	~까지 (완료 기한)	All registration forms must be submitted by Friday, March 10.	모든 등록 양식은 3월 10일 금요일까지 제출되어야 한다.
+by	전치사	~에 의해, ~함으로써	Customers can save a great deal of time by ordering groceries through our mobile app.	고객들은 저희 모바일 앱으로 식료품을 주문함으로써 많은 시간을 절약할 수 있다.
+by	전치사	~만큼 (차이)	The company's profits increased by 20 percent compared to last year.	회사의 이익이 작년 대비 20퍼센트만큼 증가했다.
+by the time	부사절 접속사	~할 때쯤에는	By the time the shipment arrives, the new warehouse will be fully operational.	배송품이 도착할 때쯤에는 새 창고가 완전히 가동되고 있을 것이다.
+after	전치사	~ 후에	After the merger, the company changed its name to Delton Industries.	합병 후에 그 회사는 이름을 델턴 인더스트리즈로 바꿨다.
+after	부사절 접속사	~한 후에	After you complete the online form, a confirmation e-mail will be sent to you.	온라인 양식을 작성한 후에 확인 이메일이 발송될 것이다.
+before	전치사	~ 전에	Please review the contract carefully before the meeting on Thursday.	목요일 회의 전에 계약서를 꼼꼼히 검토해 주십시오.
+before	부사절 접속사	~하기 전에	Please read the safety instructions before you operate the new equipment.	새 장비를 작동하기 전에 안전 지침을 읽어 주십시오.
+when	부사절 접속사	~할 때	When you arrive at the conference center, please check in at the registration desk.	회의장에 도착하면 등록 데스크에서 체크인해 주십시오.
+once	부사절 접속사	일단 ~하면, ~하자마자	Once the payment is confirmed, your order will be shipped within two days.	일단 결제가 확인되면 주문품은 이틀 이내에 발송될 것이다.
+once	부사	한때, 한 번	The building, which was once a textile factory, now houses several art galleries.	한때 섬유 공장이었던 그 건물에는 이제 여러 미술관이 들어서 있다.
+unless	부사절 접속사	~하지 않는 한, ~이 아니라면	The event will be held outdoors unless it rains on Saturday afternoon.	토요일 오후에 비가 오지 않는 한 행사는 야외에서 열릴 것이다.
+without	전치사	~ 없이	Visitors are not allowed to enter the laboratory without a security badge.	방문객은 보안 배지 없이 실험실에 들어갈 수 없다.
+in case	부사절 접속사	~할 경우에 대비해서	Please bring an umbrella in case it rains during the outdoor tour.	야외 투어 중 비가 올 경우에 대비해 우산을 가져오십시오.
+in case of	전치사	~의 경우에	In case of fire, please use the stairs instead of the elevators.	화재 시에는 엘리베이터 대신 계단을 이용하십시오.
+in the event of	전치사	~의 경우에	In the event of a power outage, all data will be backed up automatically.	정전 시에는 모든 데이터가 자동으로 백업될 것이다.
+in the event that	부사절 접속사	~할 경우에	In the event that the flight is delayed, the airline will provide meal vouchers.	항공편이 지연될 경우 항공사가 식사 쿠폰을 제공할 것이다.
+provided that	부사절 접속사	~한다면, ~라는 조건으로	Employees may work from home provided that they finish their tasks on time.	업무를 제때 끝낸다면 직원들은 재택근무를 할 수 있다.
+as long as	부사절 접속사	~하는 한, ~하기만 하면	Customers can return items as long as they keep the original receipt.	원본 영수증을 보관하고 있기만 하면 고객은 물품을 반품할 수 있다.
+even if	부사절 접속사	(설령) ~하더라도	Even if it rains tomorrow, the outdoor concert will proceed as planned.	내일 비가 오더라도 야외 콘서트는 계획대로 진행될 것이다.
+as soon as	부사절 접속사	~하자마자	Please call me as soon as the shipment arrives at the warehouse.	배송품이 창고에 도착하자마자 저에게 전화해 주십시오.
+now that	부사절 접속사	(이제) ~이니까	Now that the renovation is complete, the restaurant can accommodate twice as many guests.	보수 공사가 끝났으니 그 식당은 두 배 많은 손님을 수용할 수 있다.
+so that	부사절 접속사	~하도록, ~하기 위해	Please submit the report early so that the manager has time to review it.	관리자가 검토할 시간이 있도록 보고서를 일찍 제출해 주십시오.
+in order that	부사절 접속사	~하도록, ~하기 위해	The deadline was extended in order that all departments could submit their proposals.	모든 부서가 제안서를 제출할 수 있도록 마감일이 연장되었다.
+whereas	부사절 접속사	~인 반면에	Whereas last year's conference was held in Seoul, this year's will be in Busan.	작년 회의는 서울에서 열린 반면에 올해 회의는 부산에서 열릴 것이다.
+as if	부사절 접속사	마치 ~인 것처럼	The old building looks as if it was built only a few years ago.	그 오래된 건물은 마치 불과 몇 년 전에 지어진 것처럼 보인다.
+except that	부사절 접속사	~라는 점을 제외하면	The two models are identical except that the newer one has a larger screen.	신형의 화면이 더 크다는 점을 제외하면 두 모델은 똑같다.
+except	전치사	~을 제외하고	The office is open every day except Sunday and national holidays.	사무실은 일요일과 국경일을 제외하고 매일 문을 연다.
+except for	전치사	~을 제외하고	Except for the parking area, the entire facility will be closed for repairs.	주차장을 제외하고 시설 전체가 수리를 위해 폐쇄될 것이다.
+aside from	전치사	~을 제외하고, ~ 외에도	Aside from a few minor errors, the annual report was well written.	몇 가지 사소한 오류를 제외하면 연례 보고서는 잘 작성되었다.
+apart from	전치사	~을 제외하고, ~ 외에도	Apart from the registration fee, there are no additional costs for the workshop.	등록비를 제외하면 워크숍에 추가 비용은 없다.
+including	전치사	~을 포함하여	Several office items, including printers and copiers, will be replaced next month.	프린터와 복사기를 포함한 여러 사무용품이 다음 달에 교체될 것이다.
+such as	전치사	~와 같은	The store sells kitchen appliances such as blenders, toasters, and coffee makers.	그 상점은 믹서기, 토스터, 커피메이커와 같은 주방 가전을 판매한다.
+unlike	전치사	~와 달리	Unlike its competitors, Harper Electronics offers a three-year warranty on all products.	경쟁사들과 달리 하퍼 전자는 모든 제품에 3년 보증을 제공한다.
+regardless of	전치사	~에 상관없이	All employees must attend the safety training regardless of their position or experience.	모든 직원은 직위나 경력에 상관없이 안전 교육에 참석해야 한다.
+instead of	전치사	~ 대신에	Customers can receive a store credit instead of a cash refund for returned items.	고객은 반품한 물품에 대해 현금 환불 대신 매장 적립금을 받을 수 있다.
+instead	접속부사	대신에, 그 대신	The manager could not attend the meeting; instead, she sent her assistant.	관리자는 회의에 참석할 수 없었다. 대신 그녀는 비서를 보냈다.
+rather than	등위접속사	~보다는, ~하지 않고	The manager chose to hire a temporary worker rather than pay overtime to current staff.	관리자는 기존 직원에게 초과 근무 수당을 주기보다는 임시 직원을 고용하기로 했다.
+rather than	전치사	(+ -ing/명사) ~하는 대신에	Rather than hiring new staff, the company decided to train its current employees.	회사는 새 직원을 채용하기보다는 현 직원들을 교육하기로 결정했다.
+according to	전치사	~에 따르면, ~에 따라	According to the latest report, sales increased by 15 percent in the third quarter.	최신 보고서에 따르면 3분기 매출이 15퍼센트 증가했다.
+in accordance with	전치사	~에 따라, ~에 부합하게	All products are manufactured in accordance with strict international safety standards.	모든 제품은 엄격한 국제 안전 기준에 따라 제조된다.
+prior to	전치사	~ 전에, ~에 앞서	Please submit your travel expense report prior to the end of the month.	월말 전에 출장비 보고서를 제출해 주십시오.
+ahead of	전치사	~보다 앞서, ~ 전에	The renovation of the lobby was completed two weeks ahead of schedule.	로비 보수 공사가 예정보다 2주 앞서 완료되었다.
+following	전치사	~ 후에, ~에 이어	Following the presentation, participants are invited to a reception in the main hall.	발표 후에 참가자들은 본관 홀에서 열리는 리셉션에 초대된다.
+upon	전치사	~하자마자, ~할 때(시에)	Upon arrival at the hotel, guests should present a valid photo ID at the front desk.	호텔에 도착하자마자 투숙객은 프런트에 유효한 사진 신분증을 제시해야 한다.
+throughout	전치사	~ 내내, ~ 전역에 걸쳐	The museum will offer free guided tours throughout the summer season.	박물관은 여름 시즌 내내 무료 가이드 투어를 제공할 것이다.
+within	전치사	~ 이내에, ~ 안에	Refunds will be processed within five business days of receiving the returned item.	환불은 반품을 받은 지 영업일 기준 5일 이내에 처리될 것이다.
+beyond	전치사	~을 넘어서, ~ 이상으로, ~ 이후에	Due to circumstances beyond our control, the concert has been postponed until next month.	저희가 통제할 수 없는 상황으로 인해 콘서트가 다음 달로 연기되었다.
+as of	전치사	~부로, ~ 현재	As of next Monday, the cafeteria will be open until 8 P.M.	다음 주 월요일부로 구내식당은 오후 8시까지 운영된다.
+regarding	전치사	~에 관하여	Please contact the human resources department regarding any questions about your benefits.	복리후생에 관한 문의는 인사부에 연락해 주십시오.
+concerning	전치사	~에 관하여	The manager sent an e-mail concerning changes to the vacation policy.	관리자는 휴가 정책 변경에 관한 이메일을 보냈다.
+with regard to	전치사	~에 관하여	With regard to your recent inquiry, we are pleased to offer you a full refund.	최근 문의하신 건과 관련하여 전액 환불해 드리게 되어 기쁩니다.
+in response to	전치사	~에 응하여, ~에 대한 반응으로	In response to customer feedback, the store has extended its weekend business hours.	고객 의견에 응하여 그 상점은 주말 영업시간을 연장했다.
+on behalf of	전치사	~을 대표하여, ~을 대신하여	On behalf of the entire staff, I would like to thank you for your support.	전 직원을 대표하여 여러분의 지원에 감사드립니다.
+in light of	전치사	~에 비추어, ~을 고려하여	In light of the recent sales figures, the board decided to expand the marketing budget.	최근 매출 수치에 비추어 이사회는 마케팅 예산을 늘리기로 결정했다.
+given	전치사	~을 고려하면	Given the tight deadline, the team will need to work overtime this week.	빠듯한 마감을 고려하면 팀은 이번 주에 초과 근무를 해야 할 것이다.
+given that	부사절 접속사	~라는 점을 고려하면	Given that the budget is limited, we must choose the most affordable supplier.	예산이 한정되어 있다는 점을 고려하면 우리는 가장 저렴한 공급업체를 선택해야 한다.
+considering	전치사	~을 고려하면	Considering the poor weather, the turnout for the festival was surprisingly high.	궂은 날씨를 고려하면 축제 참가자 수는 놀라울 정도로 많았다.
+considering	부사절 접속사	~라는 점을 고려하면 (considering (that))	Considering that the store opened only last month, its sales have been impressive.	그 상점이 지난달에야 문을 열었다는 점을 고려하면 매출이 인상적이다.
+along with	전치사	~와 함께	Please send your résumé along with two letters of recommendation by Friday.	금요일까지 이력서를 추천서 두 통과 함께 보내 주십시오.
+in addition to	전치사	~ 외에도, ~에 더하여	In addition to a competitive salary, the position offers generous health benefits.	그 직책은 경쟁력 있는 급여 외에도 넉넉한 의료 혜택을 제공한다.
+in addition	접속부사	게다가, 또한	The hotel has a large pool; in addition, it offers free airport shuttle service.	그 호텔에는 큰 수영장이 있다. 게다가 무료 공항 셔틀 서비스도 제공한다.
+as well as	등위접속사	~뿐만 아니라, ~도	The hotel provides free breakfast as well as complimentary shuttle service to the airport.	그 호텔은 공항까지 무료 셔틀 서비스뿐만 아니라 무료 조식도 제공한다.
+as well as	전치사	(+ -ing) ~할 뿐만 아니라	As well as offering free delivery, the store provides a two-year warranty on all appliances.	그 매장은 무료 배송을 제공할 뿐만 아니라 모든 가전제품에 2년 보증을 제공한다.
+besides	전치사	~ 외에도	Besides free Wi-Fi, the hotel offers a fitness center and an indoor pool.	무료 와이파이 외에도 그 호텔은 피트니스 센터와 실내 수영장을 제공한다.
+besides	접속부사	게다가	The apartment is close to the subway station; besides, the rent is very reasonable.	그 아파트는 지하철역과 가깝다. 게다가 임대료도 매우 적당하다.
+whether	명사절 접속사	~인지 (아닌지)	The manager has not yet decided whether she will approve the proposal.	관리자는 그 제안을 승인할지 아직 결정하지 않았다.
+whether	부사절 접속사	~이든 아니든	Whether or not you attend the seminar, please complete the online survey by Friday.	세미나에 참석하든 안 하든 금요일까지 온라인 설문을 작성해 주십시오.
+if	부사절 접속사	만약 ~라면	If you have any questions, please contact our customer service team.	질문이 있으시면 고객 서비스팀에 연락해 주십시오.
+if	명사절 접속사	~인지 (아닌지)	Please let me know if you can attend the training session next Tuesday.	다음 주 화요일 교육에 참석할 수 있는지 알려 주십시오.
+that	명사절 접속사	~라는 것	The director announced that the company would open a new branch in Tokyo.	이사는 회사가 도쿄에 새 지점을 열 것이라고 발표했다.
+however	접속부사	그러나, 하지만	Sales rose sharply in May; however, profits remained lower than expected.	5월에 매출은 급증했다. 그러나 이익은 예상보다 낮은 수준에 머물렀다.
+therefore	접속부사	그러므로, 따라서	The printer is out of order; therefore, please use the one on the third floor.	프린터가 고장 났습니다. 그러므로 3층에 있는 것을 사용해 주십시오.
+thus	접속부사	따라서, 그리하여	The new system reduces paperwork; thus, employees can focus on more important tasks.	새 시스템은 서류 작업을 줄여 준다. 따라서 직원들은 더 중요한 업무에 집중할 수 있다.
+hence	접속부사	따라서, 그런 이유로	The shipment was delayed at customs; hence, the store opening has been postponed.	배송품이 세관에서 지연되었다. 따라서 매장 개점이 연기되었다.
+consequently	접속부사	결과적으로, 그 결과	Fuel prices rose sharply last month; consequently, the airline increased its ticket prices.	지난달 연료 가격이 급등했다. 그 결과 항공사는 항공권 가격을 인상했다.
+accordingly	접속부사	따라서, 그러므로	The client changed the deadline; accordingly, we must revise our project schedule.	고객이 마감일을 바꿨다. 따라서 우리는 프로젝트 일정을 수정해야 한다.
+accordingly	부사	그에 맞게, 그에 따라	Please review the new guidelines and adjust your department budget accordingly.	새 지침을 검토하고 그에 맞게 부서 예산을 조정해 주십시오.
+as a result	접속부사	그 결과	The factory upgraded its equipment; as a result, production increased by 30 percent.	공장은 설비를 개선했다. 그 결과 생산량이 30퍼센트 증가했다.
+furthermore	접속부사	게다가, 더욱이	The new office is spacious; furthermore, it is located near a subway station.	새 사무실은 넓다. 게다가 지하철역 근처에 위치해 있다.
+moreover	접속부사	게다가, 더욱이	The software is easy to use; moreover, it is available at no cost.	그 소프트웨어는 사용하기 쉽다. 게다가 무료로 이용할 수 있다.
+nevertheless	접속부사	그럼에도 불구하고	The project faced several setbacks; nevertheless, it was completed on schedule.	그 프로젝트는 여러 차질을 겪었다. 그럼에도 불구하고 예정대로 완료되었다.
+nonetheless	접속부사	그럼에도 불구하고	The weather was cold; nonetheless, hundreds of people attended the outdoor festival.	날씨가 추웠다. 그럼에도 불구하고 수백 명이 야외 축제에 참석했다.
+still	부사	여전히, 아직도	The position is still open, so qualified candidates are encouraged to apply.	그 자리는 여전히 공석이므로 자격을 갖춘 지원자들의 지원을 권장한다.
+still	접속부사	그럼에도, 그래도	The rent is quite high; still, many companies want offices in the building.	임대료가 꽤 비싸다. 그래도 많은 회사가 그 건물에 사무실을 원한다.
+meanwhile	접속부사	그동안에, 한편	The lobby will be renovated next month; meanwhile, visitors should use the side entrance.	로비는 다음 달에 보수될 예정이다. 그동안 방문객은 옆문을 이용해야 한다.
+in the meantime	접속부사	그동안에, 그 사이에	Your new card will arrive in a week; in the meantime, you may use your temporary card.	새 카드는 일주일 후에 도착합니다. 그동안 임시 카드를 사용하시면 됩니다.
+otherwise	접속부사	그렇지 않으면	Please register by Friday; otherwise, you will not be able to attend the workshop.	금요일까지 등록해 주십시오. 그렇지 않으면 워크숍에 참석할 수 없습니다.
+otherwise	부사	달리, 다르게	Unless otherwise noted, all items in the catalog are available for immediate delivery.	달리 명시되지 않는 한 카탈로그의 모든 품목은 즉시 배송이 가능하다.
+likewise	접속부사	마찬가지로	Our sales team exceeded its goal; likewise, the marketing team performed very well.	영업팀은 목표를 초과 달성했다. 마찬가지로 마케팅팀도 매우 좋은 성과를 냈다.
+similarly	접속부사	마찬가지로, 비슷하게	Sales in Europe increased sharply; similarly, demand in Asia grew steadily this year.	유럽 매출이 급증했다. 마찬가지로 올해 아시아 수요도 꾸준히 증가했다.
+in contrast	접속부사	그에 반해서, 대조적으로	Sales of desktop computers fell last year; in contrast, tablet sales rose sharply.	작년에 데스크톱 컴퓨터 판매는 감소했다. 대조적으로 태블릿 판매는 급증했다.
+on the other hand	접속부사	반면에, 다른 한편으로는	The downtown location is convenient; on the other hand, the rent is quite expensive.	시내 입지는 편리하다. 반면에 임대료가 꽤 비싸다.
+alternatively	접속부사	그 대신에, 또는 (대안으로)	You can pay by credit card; alternatively, you may transfer the money to our account.	신용카드로 결제하실 수 있습니다. 또는 저희 계좌로 송금하셔도 됩니다.
+for instance	접속부사	예를 들면	Many companies now offer flexible schedules; for instance, Lexa Corp. allows employees to work from home.	이제 많은 회사가 유연 근무제를 제공한다. 예를 들어 렉사 사는 직원들의 재택근무를 허용한다.
+for example	접속부사	예를 들면	Some areas need improvement; for example, customer response times are still too long.	일부 부분은 개선이 필요하다. 예를 들어 고객 응대 시간이 아직 너무 길다.
+in fact	접속부사	사실은, 실제로	The new product has been very popular; in fact, it sold out within two days.	신제품은 매우 인기가 많았다. 실제로 이틀 만에 매진되었다.
+then	부사	그때, 그 당시	The report will be ready by Friday, and I will send it to you then.	보고서는 금요일까지 준비될 것이고, 그때 보내 드리겠습니다.
+then	접속부사	그 다음에, 그러고 나서	Fill out the application form completely; then, submit it to the front desk.	신청서를 빠짐없이 작성하십시오. 그런 다음 프런트에 제출하십시오.
+but	등위접속사	그러나	The seminar was informative, but it was much longer than expected.	세미나는 유익했지만 예상보다 훨씬 길었다.
+or	등위접속사	또는, 그렇지 않으면	You can pick up the tickets at the box office, or we can mail them to you.	매표소에서 표를 찾아가셔도 되고, 아니면 저희가 우편으로 보내 드릴 수도 있습니다.
+so	등위접속사	그래서	The elevator is being repaired, so please use the stairs today.	엘리베이터가 수리 중이니 오늘은 계단을 이용해 주십시오.
+so	부사	매우, 그렇게 (so ~ that)	The response to the new product was so positive that production was increased.	신제품에 대한 반응이 매우 좋아서 생산량이 늘었다.
+yet	등위접속사	그러나, 그런데도	The hotel is small, yet it attracts many business travelers every year.	그 호텔은 작지만 매년 많은 출장객을 끌어들인다.
+yet	부사	아직	The final budget has not yet been approved by the board of directors.	최종 예산은 아직 이사회의 승인을 받지 못했다.
+for	등위접속사	왜냐하면 ~이니까	The staff worked late, for the report was due the next morning.	직원들은 늦게까지 일했다. 보고서 마감이 다음 날 아침이었기 때문이다.
+for	전치사	~ 동안 (기간)	The store will be closed for two weeks during the renovation.	그 상점은 보수 공사 기간에 2주 동안 문을 닫을 것이다.
+for	전치사	~을 위해, ~에 대해	Thank you for your prompt reply to our inquiry about the order.	주문에 관한 문의에 신속히 답변해 주셔서 감사합니다.
+both A and B	상관접속사	A와 B 둘 다	Both the manager and her assistant will attend the conference in Singapore.	관리자와 그녀의 비서 둘 다 싱가포르 회의에 참석할 것이다.
+either A or B	상관접속사	A 또는 B 둘 중 하나	Payments can be made either online or at any of our branch offices.	결제는 온라인 또는 저희 지점 어디서든 하실 수 있습니다.
+neither A nor B	상관접속사	A도 B도 아닌	Neither the director nor the board members were informed of the change.	이사도 이사회 구성원들도 그 변경 사항을 통보받지 못했다.
+not only A but also B	상관접속사	A뿐만 아니라 B도	The new model is not only lighter but also more energy efficient than before.	새 모델은 이전보다 더 가벼울 뿐만 아니라 에너지 효율도 더 높다.
+whether A or B	상관접속사	A이든 B이든	Whether you choose the standard plan or the premium plan, installation is free.	기본 요금제를 선택하든 프리미엄 요금제를 선택하든 설치는 무료입니다.

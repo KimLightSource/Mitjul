@@ -329,6 +329,20 @@ h1 { font-family: var(--display); font-size: 34px; line-height: 1.15; font-weigh
   padding: 3px 10px; border-radius: 10px; background: var(--gram-soft); color: var(--gram);
 }
 .f-or { width: 44px; border-top: 2px dashed var(--line); }
+/* 앞면 단서의 가린 자리 */
+.f-blank {
+  display: inline-block; min-width: 1.9em; margin: 0 .1em; padding: 0 .3em; border-radius: 8px;
+  border: 2px dashed var(--gram); color: var(--gram); font-family: var(--display); text-align: center; line-height: 1.25;
+}
+/* 뒤집으면 보이는 앞면 정답 + 전체 공식 */
+.cue-key {
+  align-self: stretch; text-align: center; padding: 14px 16px; border-radius: 18px;
+  background: var(--surface); border: 2px solid var(--gram);
+}
+.cue-label { font-size: 12px; font-weight: 800; color: var(--gram); letter-spacing: .02em; }
+.cue-answer { font-size: 22px; font-weight: 800; line-height: 1.4; margin: 2px 0 12px; word-break: keep-all; }
+.cue-key .formula { margin-top: 4px; }
+.card.grammar.revealed .cue-key .f-text { font-size: 16px; }
 /* 뒷면을 펼치면 공식을 조금 줄인다 */
 .card.grammar.revealed .formula { gap: 6px; }
 .card.grammar.revealed .f-text { font-size: 18px; }
@@ -391,6 +405,10 @@ h1 { font-family: var(--display); font-size: 34px; line-height: 1.15; font-weigh
 .example-en { font-size: 17px; line-height: 1.55; font-weight: 500; }
 .example-en mark { background: none; color: var(--primary); font-weight: 800; }
 .example-ko { color: var(--muted); font-size: 14px; margin-top: 8px !important; }
+/* 품사가 여럿인 단어: 예문마다 그 품사 칩을 단다 */
+.example > .pos { display: inline-block; margin-bottom: 8px; white-space: normal; }
+.sense-examples { display: flex; flex-direction: column; gap: 12px; }
+.sense-examples:empty { display: none; }
 /* 헷갈리는 단어 · 바꿔 말하기 (카드 뒷면, 단어장 편집) */
 .related { display: flex; flex-direction: column; gap: 12px; }
 .rel-title { font-size: 12px; font-weight: 800; color: var(--muted); margin-bottom: 6px; letter-spacing: .02em; }
@@ -850,3 +868,43 @@ body.studying .study-run { height: calc(100dvh - 40px - env(safe-area-inset-top)
 .quiz-choices button:disabled:not(.ok):not(.bad) { opacity: .8; }
 .quiz-choices button { align-items: flex-start; }
 .quiz-choices button b { padding-top: 1px; }
+
+/* 연결어 스페셜 테스트 */
+.conn-icon { background: var(--peach); color: var(--on-peach); }
+.conn-icon svg { width: 24px; height: 24px; }
+.conn-form { display: flex; flex-direction: column; gap: 12px; }
+.conn-help { margin: 0; font-size: 13px; color: var(--muted); text-align: center; }
+.conn-roles { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.conn-roles button {
+  border: 0; border-radius: 999px; padding: 10px 14px; font-size: 15px; font-weight: 700;
+  background: var(--surface); color: var(--text); box-shadow: var(--shadow); transition: transform .3s var(--spring);
+}
+.conn-roles button:active { transform: scale(.94); }
+.conn-roles button[aria-pressed="true"] { background: var(--lime); color: var(--on-lime); }
+.conn-inputs { display: flex; flex-direction: column; gap: 8px; }
+.conn-inputs:empty { display: none; }
+.conn-in { display: flex; align-items: center; gap: 10px; background: var(--surface); border-radius: 18px; box-shadow: var(--shadow); padding: 6px 6px 6px 12px; }
+.conn-in .pos { flex: none; }
+.conn-in input { flex: 1; min-width: 0; border: 0; outline: none; background: none; padding: 12px 8px; font-size: 17px; font-weight: 600; color: var(--text); }
+.conn-in:focus-within { box-shadow: 0 0 0 2px var(--primary), var(--shadow); }
+.conn-ans { display: flex; flex-direction: column; gap: 6px; }
+.conn-ans .meaning-row { justify-content: flex-start; text-align: left; }
+.conn-ans .meaning { font-size: 17px; }
+.conn-ex { font-size: 13px; color: var(--muted); margin: -2px 0 4px; }
+.tl-conn { display: block; }
+
+/* 전접부 단어 보기 */
+.cs-entry { margin-top: -4px; }
+#cs-bar { height: 100%; width: 0; border-radius: 5px; background: var(--peach); transition: width .6s var(--spring); }
+.cs-card { width: 100%; min-height: 300px; justify-content: center; cursor: pointer; }
+.cs-card .cs-chip { position: absolute; top: 18px; right: 18px; background: var(--peach); color: var(--on-peach); }
+.cs-roles { font-size: 13px; font-weight: 700; color: var(--muted); }
+.cs-roles:empty { display: none; }
+.cs-back { width: 100%; display: flex; flex-direction: column; gap: 14px; animation: back-in .45s var(--spring) both; }
+.cs-sense { display: flex; flex-direction: column; gap: 8px; }
+.cs-sense .meaning-row { display: flex; align-items: center; gap: 10px; }
+.cs-sense .meaning { font-size: 19px; }
+.cs-sense .example { padding: 12px 14px; }
+.cs-sense .example-en { font-size: 15px; }
+.cs-sense .example-ko { font-size: 13px; margin-top: 4px !important; }
+.cs-card.revealed .hint { display: none; }

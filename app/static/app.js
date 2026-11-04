@@ -164,9 +164,15 @@ $("#kind-pick").addEventListener("click", (e) => {
 const TEST_SIZE = 20;
 let test = null, ti = 0, testPoll = null;
 const VERDICT = { correct: "정답", wrong: "오답", pending: "채점 중", error: "채점 실패" };
+// 연결어 스페셜 테스트(test.kind "conn")도 이 화면을 같이 쓴다 — 뜻 칸 대신 역할 칩 + 역할별 뜻 칸.
+// 단어장과 상관없는 빈출 목록(app/conn-words.tsv)이고, 역할이 하나라도 빠지거나 뜻 하나라도 못 쓰면 오답이다.
+const CONN_ROLES = ["전치사", "부사절 접속사", "명사절 접속사", "접속부사", "등위접속사", "상관접속사", "부사"];
+const isConn = (t = test) => t?.kind === "conn";
+const testBase = (t = test) => (isConn(t) ? "/conn-tests" : "/tests");
 
-async function startTest() {
-  try { test = await api("/tests?limit=" + TEST_SIZE, { method: "POST" }); }
+async function startTest(kind) {
+  const conn = kind === "conn";
+  try { test = await api((conn ? "/conn-tests" : "/tests") + "?limit=" + TEST_SIZE, { method: "POST" }); }
   catch (e) { return toast(e.message); }
   ti = 0;
   $("#test-result").hidden = true;
@@ -182,34 +188,42 @@ function showQuestion() {
   $("#test-word").textContent = it.word;
   $("#test-count").textContent = `${ti + 1}/${test.items.length}`;
   $("#test-bar").style.width = (ti / test.items.length) * 100 + "%";
+  $("#test-chip").textContent = isConn() ? "연결어 스페셜" : "암기 테스트";
   $("#test-input").value = "";
+  $("#test-input").hidden = isConn();
+  $("#conn-form").hidden = !isConn();
   $("#test-form").hidden = false;
   $("#test-feedback").hidden = true;
-  $("#test-input").focus();
+  if (isConn()) renderConnForm(new Set());
+  else $("#test-input").focus();
   if ($("#opt-autospeak").checked) speak(it.word);
 }
 
 async function submitAnswer(answer) {
   const it = test.items[ti];
-  let verdict;
+  let verdict, reason;
   try {
-    ({ verdict } = await api(`/tests/${test.id}/answers/${it.aid}`, { method: "POST", json: { answer } }));
+    ({ verdict, reason } = await api(`${testBase()}/${test.id}/answers/${it.aid}`,
+      { method: "POST", json: isConn() ? { roles: answer || {} } : { answer } }));
   } catch (e) { return toast("저장 실패: " + e.message); }
   it.verdict = verdict;
-  it.answer = answer;
+  it.answer = isConn() && !Object.keys(answer || {}).length ? null : answer;
+  it.reason = reason;
   buzz(verdict === "correct" ? 12 : verdict === "wrong" ? [10, 40, 10] : 8);
-  $("#test-input").blur();
+  document.activeElement?.blur?.();
   $("#test-form").hidden = true;
   const v = $("#test-verdict");
   v.className = "verdict " + verdict;
   v.innerHTML = {
     correct: "✓ 정답",
-    wrong: "✗ 몰랐어요 <small>다시 학습 카드로 보낼게요</small>",
-    pending: "⏳ AI가 채점할게요 <small>시험이 끝나면 확인해요</small>",
+    wrong: isConn() ? `✗ 틀렸어요 <small>${esc(reason || "다음 시험에 먼저 나와요")}</small>`
+      : "✗ 몰랐어요 <small>다시 학습 카드로 보낼게요</small>",
+    pending: isConn() ? "⏳ AI가 뜻을 채점할게요 <small>품사는 다 맞았어요</small>"
+      : "⏳ AI가 채점할게요 <small>시험이 끝나면 확인해요</small>",
   }[verdict];
-  $("#test-answer").innerHTML = sensesHtml(it);
-  $("#test-mine").textContent = answer || "—";
-  $("#test-mine-row").hidden = !answer;
+  $("#test-answer").innerHTML = isConn() ? connAnswerHtml(it) : sensesHtml(it);
+  $("#test-mine").innerHTML = isConn() ? connMine(it.answer) : esc(answer || "—");
+  $("#test-mine-row").hidden = !it.answer;
   $("#test-feedback").hidden = false;
   $("#test-next").textContent = ti + 1 < test.items.length ? "다음" : "결과 보기";
   $("#test-next").focus();
@@ -217,7 +231,7 @@ async function submitAnswer(answer) {
 
 async function nextQuestion() {
   if (ti + 1 < test.items.length) { ti++; return showQuestion(); }
-  try { test = await api(`/tests/${test.id}/finish`, { method: "POST" }); }
+  try { test = await api(`${testBase()}/${test.id}/finish`, { method: "POST" }); }
   catch (e) { return toast("저장 실패: " + e.message); }
   $("#test-bar").style.width = "100%";
   $("#test-q").hidden = true;
@@ -234,18 +248,21 @@ function renderTestResult() {
   requestAnimationFrame(() => $("#test-ring").style.setProperty("--p", items.length ? (correct / items.length) * 100 : 0));
   $("#test-score-sub").textContent = test.grading
     ? "채점이 끝나면 점수가 바뀔 수 있어요"
-    : wrong ? `틀린 ${wrong}개는 다시 학습 카드로 보냈어요` : "모두 맞혔어요 🎉";
+    : wrong ? (isConn() ? `틀린 ${wrong}개는 다음 시험에 먼저 나와요` : `틀린 ${wrong}개는 다시 학습 카드로 보냈어요`)
+    : "모두 맞혔어요 🎉";
   $("#test-grading").hidden = !test.grading;
   $("#test-list").innerHTML = items.map((i) => `
     <li>
       <span class="tl-word">${esc(i.word)}</span>
       <span class="tl-chip ${i.verdict}">${VERDICT[i.verdict] || ""}</span>
-      <span class="tl-detail">내 답 <b>${esc(i.answer || "—")}</b> · 정답 ${sensesInline(i)}</span>
-      ${i.graded_by === "ai" && i.reason ? `<span class="tl-reason">AI: ${esc(i.reason)}</span>` : ""}
+      ${isConn() ? `<span class="tl-detail"><span class="tl-conn">내 답 <b>${connMine(i.answer)}</b></span>정답 ${connInline(i)}</span>`
+        : `<span class="tl-detail">내 답 <b>${esc(i.answer || "—")}</b> · 정답 ${sensesInline(i)}</span>`}
+      ${i.reason && (i.graded_by === "ai" || isConn())
+        ? `<span class="tl-reason">${i.graded_by === "ai" ? "AI: " : ""}${esc(i.reason)}</span>` : ""}
     </li>`).join("");
   clearTimeout(testPoll);
   if (test.grading) testPoll = setTimeout(async () => {
-    try { test = await api(`/tests/${test.id}`); renderTestResult(); } catch {}
+    try { test = await api(`${testBase()}/${test.id}`); renderTestResult(); } catch {}
   }, 4000);
 }
 
@@ -259,7 +276,7 @@ layerClose.test = async () => {
   // 중간에 나가도 답한 문항은 채점되게 끝내기를 보낸다(안 푼 문항은 서버가 버린다)
   let grading = t?.grading;
   if (t && midway) {
-    try { grading = (await api(`/tests/${t.id}/finish`, { method: "POST" })).grading; } catch {}
+    try { grading = (await api(`${testBase(t)}/${t.id}/finish`, { method: "POST" })).grading; } catch {}
   }
   if (grading && !layers.includes("history")) toast("채점이 끝나면 ‘채점 기록’에서 볼 수 있어요");
   if (layers.includes("history")) loadHistory();
@@ -267,8 +284,8 @@ layerClose.test = async () => {
 };
 
 // 지난 결과 다시 보기(채점 기록에서). 채점 중이면 결과 화면이 그대로 4초마다 갱신된다.
-async function openTestResult(id) {
-  try { test = await api(`/tests/${id}`); } catch (e) { return toast("불러오기 실패: " + e.message); }
+async function openTestResult(id, kind) {
+  try { test = await api(`${kind === "conn" ? "/conn-tests" : "/tests"}/${id}`); } catch (e) { return toast("불러오기 실패: " + e.message); }
   $("#test-q").hidden = true;
   $("#test-result").hidden = false;
   $("#test-bar").style.width = "100%";
@@ -286,10 +303,10 @@ async function loadHistory() {
   let list;
   try { list = await api("/tests"); } catch (e) { return toast("불러오기 실패: " + e.message); }
   $("#history-list").innerHTML = list.length ? list.map((t) => `
-    <li><button data-id="${t.id}">
+    <li><button data-id="${t.id}" data-kind="${t.kind}">
       <span class="hl-score">${t.correct}<span>/${t.total}</span></span>
       <span class="hl-body">
-        <b>${fmtTime(t.created_at)}</b>
+        <b>${t.kind === "conn" ? `<span class="pos-s">연결어</span>` : ""}${fmtTime(t.created_at)}</b>
         ${t.grading ? `<span class="grading-dot"><span class="pulse"></span>AI 채점 중 · ${t.pending}문항</span>`
           : `<small>정답 ${t.correct} · 오답 ${t.wrong}${t.error ? ` · 채점 실패 ${t.error}` : ""}</small>`}
       </span>
@@ -314,18 +331,62 @@ $("#btn-test-history").addEventListener("click", openHistory);
 $("#history-close").addEventListener("click", () => closeLayer("history"));
 $("#history-list").addEventListener("click", (e) => {
   const b = e.target.closest("button[data-id]");
-  if (b) openTestResult(+b.dataset.id);
+  if (b) openTestResult(+b.dataset.id, b.dataset.kind);
 });
-$("#btn-test").addEventListener("click", startTest);
+$("#btn-test").addEventListener("click", () => startTest());
+$("#btn-conn").addEventListener("click", () => startTest("conn"));
 $("#test-quit").addEventListener("click", () => closeLayer("test"));
 $("#test-close").addEventListener("click", () => closeLayer("test"));
 $("#test-form").addEventListener("submit", (e) => {
   e.preventDefault();
+  if (isConn()) {
+    const roles = connRoles();
+    if (!Object.keys(roles).length) return toast("품사를 하나 이상 골라 주세요");
+    return submitAnswer(roles);
+  }
   const a = $("#test-input").value.trim();
   if (!a) return $("#test-input").focus();
   submitAnswer(a);
 });
-$("#test-skip").addEventListener("click", () => submitAnswer(""));
+$("#test-skip").addEventListener("click", () => submitAnswer(isConn() ? {} : ""));
+
+// 연결어 테스트 입력: 칩을 누르면 그 역할의 뜻 칸이 생기고(역할 순서대로), 다시 누르면 없어진다. 적던 뜻은 유지.
+function renderConnForm(selected, focusRole) {
+  const typed = connRoles();
+  $("#conn-roles").innerHTML = CONN_ROLES.map((r) =>
+    `<button type="button" data-role="${r}" aria-pressed="${selected.has(r)}">${r}</button>`).join("");
+  const on = CONN_ROLES.filter((r) => selected.has(r));
+  $("#conn-inputs").innerHTML = on.map((r, i) => `
+    <label class="conn-in"><span class="pos">${r}</span>
+      <input data-role="${r}" placeholder="뜻" autocomplete="off" enterkeyhint="${i + 1 < on.length ? "next" : "done"}"
+        value="${esc(typed[r] || "")}"></label>`).join("");
+  if (focusRole) $(`#conn-inputs input[data-role="${focusRole}"]`)?.focus();
+}
+function connRoles() {
+  return Object.fromEntries([...document.querySelectorAll("#conn-inputs input")].map((x) => [x.dataset.role, x.value.trim()]));
+}
+$("#conn-roles").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-role]");
+  if (!b) return;
+  buzz(6);
+  const sel = new Set(Object.keys(connRoles()));
+  const r = b.dataset.role;
+  sel.has(r) ? sel.delete(r) : sel.add(r);
+  renderConnForm(sel, sel.has(r) ? r : null);
+});
+$("#conn-inputs").addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" || e.isComposing) return;
+  const all = [...document.querySelectorAll("#conn-inputs input")];
+  const next = all[all.indexOf(e.target) + 1];
+  if (next) { e.preventDefault(); next.focus(); }
+});
+// 정답: 역할 칩 + 뜻, 그 아래 예문. 내 답: "역할: 뜻" 나열
+const connAnswerHtml = (it) => `<div class="conn-ans">${(it.senses || []).map((s) =>
+  `<div class="meaning-row"><span class="pos">${esc(s.pos)}</span><span class="meaning">${esc(s.meaning)}</span></div>` +
+  (s.example ? `<p class="conn-ex">${highlight(s.example, it.word)}</p>` : "")).join("")}</div>`;
+const connInline = (it) => (it.senses || []).map((s) => `<span class="pos-s">${esc(s.pos)}</span>${esc(s.meaning)}`).join(" · ");
+const connMine = (a) => (a && Object.keys(a).length
+  ? Object.entries(a).map(([r, m]) => `<span class="pos-s">${esc(r)}</span>${esc(m || "—")}`).join(" · ") : "—");
 $("#test-next").addEventListener("click", nextQuestion);
 $("#test-speak").addEventListener("click", () => test && speak(test.items[ti].word));
 
@@ -464,6 +525,142 @@ document.addEventListener("keydown", (e) => {
   else if (e.key === "ArrowLeft" || e.key === "1") decideLc(false);
   else if (e.key === " ") { e.preventDefault(); revealLc(); }
   else if (e.key === "Backspace" || e.key === "z" || e.key === "Z") { e.preventDefault(); undoLc(); }
+});
+
+// ---------- 전접부 단어 보기 ----------
+// 연결어 테스트 목록(conn-words.tsv)을 플래시카드로 외운다. 앞면은 표제어만, 탭하면 역할(품사)마다 뜻·예문.
+// '알아요/모름'은 서버의 conn_study에 간격 반복으로 남고(단어장 단계와 무관), '모름'은 이번 세트 끝에 한 번 더 나온다.
+const CS_SIZE = 20;
+let cs = null; // { items, base(처음 장 수), i, undo: [{word, prev, again}], dunno: Set }
+
+function renderCsEntry(s) {
+  const due = s.conn_study_due || 0, fresh = s.conn_study_new || 0;
+  $("#cs-entry-sub").textContent = !due && fresh === s.conn_total
+    ? `빈출 ${s.conn_total}개 — 품사별 뜻과 예문 외우기`
+    : `복습 ${due} · 처음 ${fresh} · 외운 ${s.conn_study_mastered || 0}/${s.conn_total}`;
+}
+
+async function startCs() {
+  let r;
+  try { r = await api("/conn-cards?limit=" + CS_SIZE); } catch (e) { return toast("불러오기 실패: " + e.message); }
+  cs = { items: r.items, base: r.items.length, i: 0, undo: [], dunno: new Set() };
+  $("#cs-result").hidden = true;
+  $("#cs-q").hidden = false;
+  if ($("#cs-screen").hidden) {
+    $("#cs-screen").hidden = false;
+    document.body.classList.add("studying");
+    openLayer("cs");
+  }
+  showCs();
+}
+
+// 같은 역할이 두 줄이면(since 부사절 접속사 ×2) 칩은 한 번만
+const csRoles = (it) => [...new Set(it.senses.map((s) => s.pos))];
+
+function showCs() {
+  const it = cs.items[cs.i];
+  $("#cs-word").textContent = it.word;
+  $("#cs-chip").textContent = cs.i >= cs.base ? "다시 보기" : "전접부";
+  $("#cs-roles").textContent = "";
+  $("#cs-back").hidden = true;
+  $("#cs-back").innerHTML = it.senses.map((s, k) => `
+    <div class="cs-sense">
+      <div class="meaning-row"><span class="pos">${esc(s.pos)}</span><span class="meaning">${esc(s.meaning)}</span></div>
+      ${s.example ? `<div class="example" data-k="${k}"><p class="example-en">${highlight(s.example, it.word)}</p>
+        <p class="example-ko">${esc(s.example_ko)}</p></div>` : ""}
+    </div>`).join("");
+  $("#cs-card").classList.remove("revealed");
+  $("#cs-count").textContent = `${cs.i + 1}/${cs.items.length}`;
+  $("#cs-bar").style.width = (cs.i / cs.items.length) * 100 + "%";
+  $("#cs-undo").disabled = !cs.undo.length;
+  if (accentMode === "mix") rollAccent();
+}
+
+function revealCs() {
+  if (!cs || $("#cs-card").classList.contains("revealed")) return;
+  const it = cs.items[cs.i];
+  $("#cs-roles").textContent = csRoles(it).length > 1 ? `품사 ${csRoles(it).length}개` : "";
+  $("#cs-back").hidden = false;
+  $("#cs-card").classList.add("revealed");
+  speak(it.word);
+}
+
+let csBusy = false;
+async function decideCs(known) {
+  if (!cs || csBusy || !$("#cs-result").hidden) return;
+  csBusy = true;
+  const it = cs.items[cs.i];
+  buzz(known ? 12 : [10, 40, 10]);
+  let r;
+  try { r = await api("/conn-cards/review", { method: "POST", json: { word: it.word, known } }); }
+  catch (e) { csBusy = false; return toast("저장 실패: " + e.message); }
+  // '모름'은 세트 끝에 한 번 더(이미 다시 보는 중이면 더 붙이지 않는다)
+  const again = !known && !cs.dunno.has(it.word);
+  if (!known) cs.dunno.add(it.word);
+  if (again) cs.items.push(it);
+  cs.undo.push({ word: it.word, prev: r.prev, again });
+  csBusy = false;
+  if (++cs.i < cs.items.length) return showCs();
+  finishCs();
+}
+
+async function undoCs() {
+  if (!cs || csBusy || !cs.undo.length || !$("#cs-result").hidden) return;
+  csBusy = true;
+  const last = cs.undo[cs.undo.length - 1];
+  try { await api("/conn-cards/undo", { method: "POST", json: { word: last.word, prev: last.prev } }); }
+  catch (e) { csBusy = false; return toast("되돌리기 실패: " + e.message); }
+  cs.undo.pop();
+  if (last.again) { cs.items.pop(); cs.dunno.delete(last.word); }
+  cs.i--;
+  csBusy = false;
+  buzz(8);
+  showCs();
+}
+
+function finishCs() {
+  speechSynthesis?.cancel();
+  const first = cs.items.slice(0, cs.base);
+  const dunno = first.filter((it) => cs.dunno.has(it.word));
+  $("#cs-bar").style.width = "100%";
+  $("#cs-undo").disabled = true;
+  $("#cs-q").hidden = true;
+  $("#cs-result").hidden = false;
+  $("#cs-result-title").textContent = `${first.length}개 중 ${first.length - dunno.length}개를 알았어요`;
+  $("#cs-result-sub").textContent = dunno.length
+    ? `모른 ${dunno.length}개는 다음에 맨 먼저 나와요`
+    : "전부 알았어요 🎉 연결어 스페셜 테스트로 확인해 보세요";
+  $("#cs-list").innerHTML = dunno.map((it) => `
+    <li><span class="tl-word">${esc(it.word)}</span><span class="tl-chip wrong">모름</span>
+    <span class="tl-detail tl-conn">${connInline(it)}</span></li>`).join("");
+  cs.undo = [];
+}
+
+layerClose.cs = () => {
+  speechSynthesis?.cancel();
+  cs = null;
+  $("#cs-screen").hidden = true;
+  document.body.classList.remove("studying");
+  loadStats();
+};
+$("#btn-cs").addEventListener("click", startCs);
+$("#cs-quit").addEventListener("click", () => closeLayer("cs"));
+$("#cs-close").addEventListener("click", () => closeLayer("cs"));
+$("#cs-more").addEventListener("click", startCs);
+$("#cs-know").addEventListener("click", () => decideCs(true));
+$("#cs-dunno").addEventListener("click", () => decideCs(false));
+$("#cs-undo").addEventListener("click", undoCs);
+$("#cs-card").addEventListener("click", (e) => {
+  const ex = e.target.closest(".example");
+  if (ex && cs) return speak(cs.items[cs.i].senses[+ex.dataset.k].example);
+  revealCs();
+});
+document.addEventListener("keydown", (e) => {
+  if ($("#cs-screen").hidden || !cs || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.key === "ArrowRight" || e.key === "2") decideCs(true);
+  else if (e.key === "ArrowLeft" || e.key === "1") decideCs(false);
+  else if (e.key === " " || e.key === "Enter") { e.preventDefault(); revealCs(); }
+  else if (e.key === "Backspace" || e.key === "z" || e.key === "Z") { e.preventDefault(); undoCs(); }
 });
 
 // ---------- 파트 5 문제 ----------
@@ -722,6 +919,10 @@ async function loadStats() {
     $("#btn-test-history").hidden = !s.tests;
     renderLcEntry(s);
     renderQuizEntry(s);
+    renderCsEntry(s);
+    $("#conn-entry-sub").textContent = s.conn_correct || s.conn_wrong
+      ? `${s.conn_total}개 중 맞힘 ${s.conn_correct}${s.conn_wrong ? ` · 틀린 ${s.conn_wrong}개 먼저 나와요` : ""}`
+      : `빈출 ${s.conn_total}개 — 품사를 전부 맞혀야 정답`;
     $("#test-history-grading").hidden = !s.tests_grading;
   } catch (e) { toast("서버 연결 실패: " + e.message); }
 }
@@ -781,6 +982,11 @@ function senses(w) {
 const sensesHtml = (w) => senses(w).map((s) =>
   `<div class="meaning-row">${s.pos ? `<span class="pos">${esc(s.pos)}</span>` : ""}<span class="meaning">${esc(s.text)}</span></div>`
 ).join("");
+// 둘째 줄부터의 품사별 예문(related.senses). 첫 줄 품사의 예문은 words.example.
+function senseExamples(w) {
+  const ex = relatedOf(w).senses;
+  return Array.isArray(ex) ? ex.filter((x) => x && x.example) : [];
+}
 const sensesInline = (w) => senses(w).map((s) =>
   (s.pos ? `<span class="pos-s">${esc(s.pos)}</span>` : "") + esc(s.text)
 ).join(" · ");
@@ -808,7 +1014,8 @@ function formulaText(t) {
       html += esc(seg.slice(at, m.index)) + `<b>${esc(m[0])}</b>`;
       at = m.index + m[0].length;
     }
-    return html + esc(seg.slice(at));
+    // 앞면 단서(related.cue.front)의 가린 자리 ? 는 빈칸으로
+    return (html + esc(seg.slice(at))).replace(/\?/g, '<span class="f-blank">?</span>');
   }).join("");
 }
 
@@ -917,7 +1124,7 @@ function relatedHtml(w) {
 function boxLabel(w) {
   if (w.again) return ["다시 보기", "again"]; // 이번 세트에서 '모름'으로 뒤에 다시 붙은 카드
   if (w.seen === 0) return ["새 단어", "new"];
-  if (w.box === 0) return ["다시 보기", "again"];
+  if (w.box === 0 || w.lapsed) return ["다시 보기", "again"]; // 0단계 또는 방금 '모름'(단계는 절반만 내려간다)
   return ["복습 " + w.box + "단계", ""];
 }
 
@@ -997,8 +1204,14 @@ function showCard() {
   revealed = false;
   const g = isGrammar(w);
   card.classList.toggle("grammar", g);
-  if (g) $("#card-word").innerHTML = formulaHtml(w.word);
+  // 문법 카드: 앞면 단서가 있으면 핵심을 가린 단서를 앞면에, 정답·공식은 뒤집으면 보여 준다
+  const cue = g ? relatedOf(w).cue : null;
+  if (g) $("#card-word").innerHTML = formulaHtml(cue ? cue.front : w.word);
   else $("#card-word").textContent = w.word;
+  $("#card-cue").hidden = !cue;
+  $("#card-cue-key").textContent = cue ? cue.key : "";
+  $("#card-cue-formula").innerHTML = cue ? formulaHtml(w.word) : "";
+  $("#card-hint").textContent = cue ? "떠올려 보고 탭해서 확인" : "탭해서 뜻 보기";
   const [label, cls] = boxLabel(w);
   $("#card-box").textContent = g ? label.replace("단어", "공식") : label;
   $("#card-box").className = "chip " + (g ? "grammar" : cls);
@@ -1019,6 +1232,17 @@ function showCard() {
   $("#card-exam").hidden = !exam;
   $("#card-example-ko").textContent = w.example_ko;
   $(".example").hidden = !w.example;
+  const more = g ? [] : senseExamples(w);
+  // 예문 칩은 품사만 단다. 같은 품사가 두 줄이면(since: 부사절 접속사 ~ 이후로 / ~ 때문에) 그 줄 뜻도 붙여 구분한다.
+  const lines = senses(w);
+  const posLabel = (s) => !s ? "" : lines.filter((l) => l.pos === s.pos).length > 1 ? `${s.pos} · ${s.text}` : s.pos;
+  $("#card-example-pos").textContent = posLabel(lines[0]) || w.pos;
+  $("#card-example-pos").hidden = !more.length || !w.pos;
+  $("#card-sense-examples").innerHTML = more.map((x, i) =>
+    `<div class="example" data-speak="example" data-text="${esc(x.example)}">` +
+    `<span class="pos">${esc(lines[i + 1]?.pos === x.pos ? posLabel(lines[i + 1]) : x.pos)}</span>` +
+    `<p class="example-en">${highlight(x.example, w.word)}</p><p class="example-ko">${esc(x.example_ko || "")}</p></div>`
+  ).join("");
   $("#card-back").hidden = true;
   $("#card-hint").hidden = false;
   $("#progress-text").textContent = `${Math.min(pos + 1, queue.length)}/${queue.length}`;
@@ -1196,7 +1420,7 @@ function finishSet() {
     if (say && revealed) return speak(say.dataset.say); // 헷갈리는 단어·바꿔 말하기·공식 속 단어
     const target = e.target.closest("[data-speak]");
     const w = queue[pos];
-    if (target?.dataset.speak === "example" && revealed) speak(w.example, 0.9);
+    if (target?.dataset.speak === "example" && revealed) speak(target.dataset.text || w.example, 0.9);
     else if (!isGrammar(w) && (target?.dataset.speak === "word" || !revealed)) speak(w.word);
     reveal();
   });
@@ -1208,7 +1432,8 @@ function finishSet() {
 // 누르면 직접 추가와 같은 AI 채우기 작업으로 넘긴다(사전형·뜻·예문은 AI가, 중복은 서버가 거른다).
 function selectedText() {
   const sel = getSelection();
-  if (!sel || sel.isCollapsed || !$("#card-example").contains(sel.anchorNode)) return "";
+  const node = sel?.anchorNode?.nodeType === 1 ? sel.anchorNode : sel?.anchorNode?.parentElement;
+  if (!sel || sel.isCollapsed || !node?.closest("#card .example-en")) return "";
   let t = sel.toString().replace(/\s+/g, " ").trim().replace(/^[^A-Za-z]+|[^A-Za-z]+$/g, "");
   if (!t || /[가-힣]/.test(t) || t.split(" ").length > 6 || t.length > 60) return "";
   // 문장 첫 글자라 대문자인 일반 단어는 소문자로 (Please → please). 약어(HR)는 그대로.

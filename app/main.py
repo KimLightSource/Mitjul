@@ -33,6 +33,7 @@ UPLOADS = os.path.join(DATA, "uploads")
 WORKER_TOKEN = os.environ["VOCAB_WORKER_TOKEN"]
 STATIC = os.path.join(os.path.dirname(__file__), "static")
 LC_FILE = os.path.join(os.path.dirname(__file__), "lc-words.tsv")
+CONN_FILE = os.path.join(os.path.dirname(__file__), "conn-words.tsv")
 
 # 간격 반복 단계(box)별 다음 복습까지의 일수. '알아요'면 한 단계 올라가고 '모름'이면 0으로.
 INTERVALS = [0, 1, 3, 7, 14, 30, 60, 120]
@@ -93,6 +94,31 @@ create table if not exists test_answers (
   verdict text,          -- null(미응답) / correct / wrong / pending(AI 채점 대기) / error(AI 채점 실패)
   reason text,
   graded_by text         -- local / ai / skip
+);
+-- 연결어 스페셜 테스트: 단어장과 상관없이 conn-words.tsv의 전치사·접속사·접속부사를 낸다. 답은 {역할: 뜻} JSON.
+create table if not exists conn_tests (
+  id integer primary key,
+  created_at integer not null,
+  finished_at integer
+);
+-- 연결어 단어 보기(전접부 플래시카드): conn-words.tsv 표제어마다 간격 반복 단계. 단어장(words)과 따로 논다.
+create table if not exists conn_study (
+  word text primary key,
+  box integer not null default 0,
+  due_at integer not null default 0,
+  lapsed integer not null default 0,
+  seen integer not null default 0,
+  known integer not null default 0
+);
+create table if not exists conn_answers (
+  id integer primary key,
+  test_id integer not null,
+  word text not null,
+  answer text,           -- {"부사절 접속사": "~ 때문에", ...}
+  verdict text,          -- test_answers와 같다
+  reason text,
+  graded_by text,
+  at integer
 );
 -- 진행 중인 학습 세트(한 개뿐). 앱을 끄거나 나가도 이어 하도록 카드를 넘길 때마다 저장된다.
 create table if not exists study_session (
@@ -249,6 +275,9 @@ with db() as c:
     # 처음 추가할 때 지난 테스트 기록에서 채운다 — 최근에 맞혔으면(틀린 뒤로 연속 정답) 몇 번이든
     # "한 번 맞힘"(test_box 1, 마지막 정답일 + 3일)으로 친다(2026-10-14 사용자 결정).
     # 2026-10-23 토익 출제 중요도(0 = 아직 안 매김, 1 가끔 · 2 빈출 · 3 필수). 기존 카드는 rank 작업으로 채운다.
+    # 2026-10-28 '모름'이면 0단계 대신 절반으로 — 방금 '모름'한 카드 표시(다음 '알아요'에 지움)
+    if "lapsed" not in {r[1] for r in c.execute("pragma table_info(words)")}:
+        c.execute("alter table words add column lapsed integer not null default 0")
     if "freq" not in {r[1] for r in c.execute("pragma table_info(words)")}:
         c.execute("alter table words add column freq integer not null default 0")
     if "test_box" not in {r[1] for r in c.execute("pragma table_info(words)")}:
@@ -303,8 +332,10 @@ class WordIn(BaseModel):
     freq: int = 0  # 토익 출제 중요도 1~3 (AI 카드만)
     paraphrases: list[dict] = []
     confusables: list[dict] = []
+    senses: list[dict] = []  # 둘째 줄부터의 품사별 예문 [{pos, example, example_ko}] (어휘만)
     terms: list[dict] = []  # 문법 공식 속 영어 단어의 뜻 (문법만)
     exam: dict | None = None  # 문법 공식의 토익 출제 유형 (문법만)
+    cue: dict | None = None  # 문법 카드 앞면의 회상 단서 {front, key} (문법만)
 
 
 class RelatedIn(BaseModel):
@@ -312,6 +343,7 @@ class RelatedIn(BaseModel):
     id: int
     paraphrases: list[dict] = []
     confusables: list[dict] = []
+    senses: list[dict] = []  # 품사별 예문 채우기(payload.kind 'senses') 결과
     terms: list[dict] = []
 
 
@@ -333,6 +365,7 @@ class UndoIn(BaseModel):
     """review가 돌려준 `undo` 그대로 — 넘기기 전 상태와 그때 센 날짜."""
     box: int
     due_at: int
+    lapsed: int = 0
     known: bool
     day: str
 
@@ -380,12 +413,15 @@ def clean(w: WordIn) -> dict:
 
 
 # ---------- 바꿔 말하기 · 헷갈리는 단어 ----------
-# words.related = {"paraphrases": [{word, meaning}], "confusables": [{word, meaning, tip}]} (JSON 문자열, 어휘)
-#               = {"terms": [{word, meaning}], "exam": {type, q, choices, answer}} (문법 공식 — 공식 속 영어 단어의
-#                 뜻과 토익 출제 유형, 2026-10-17)
+# words.related = {"paraphrases": [{word, meaning}], "confusables": [{word, meaning, tip}],
+#                  "senses": [{pos, example, example_ko}]} (JSON 문자열, 어휘 — senses는 뜻 둘째 줄부터의
+#                  품사별 예문, 2026-10-26. 첫 줄 품사의 예문은 words.example 그대로)
+#               = {"terms": [{word, meaning}], "exam": {type, q, choices, answer}, "cue": {front, key}} (문법 공식 —
+#                 공식 속 영어 단어의 뜻과 토익 출제 유형(2026-10-17), 앞면 회상 단서(2026-10-27): front는 핵심을 ?로
+#                 가린 공식, key는 가린 핵심)
 # 카드 뒷면에 참고용으로만 보여 준다. 헷갈리는 단어를 카드로 만들어 짝으로 묶던 방식은 쉬운 파생어 카드가
 # 수백 개 생겨서 하루 만에 뺐다(2026-10-05, 사용자 결정).
-MAX_PARAPHRASES, MAX_CONFUSABLES, MAX_TERMS = 3, 2, 24
+MAX_PARAPHRASES, MAX_CONFUSABLES, MAX_TERMS, MAX_SENSES = 3, 2, 24, 3
 
 
 def clean_exam(e):
@@ -400,7 +436,29 @@ def clean_exam(e):
     return ex
 
 
-def related_json(paraphrases=(), confusables=(), terms=(), exam=None) -> str:
+def clean_senses(xs):
+    """품사별 예문 [{pos, example, example_ko}] — 품사와 영어 예문이 있는 것만. 뜻 둘째 줄부터 줄마다 하나라
+    같은 품사가 두 번 올 수 있다(since: [부사절 접속사] ~ 때문에 — 연결어는 역할·뜻마다 줄을 나눈다)."""
+    out = []
+    for x in xs if isinstance(xs, list) else []:
+        if not isinstance(x, dict):
+            continue
+        d = {k: " ".join(str(x.get(k) or "").split())[:300] for k in ("pos", "example", "example_ko")}
+        d["pos"] = d["pos"].strip("[]()")[:10]
+        if d["pos"] and d["example"] and d["example"] not in {o["example"] for o in out}:
+            out.append(d)
+    return out[:MAX_SENSES]
+
+
+def clean_cue(c):
+    """앞면 단서 {front, key} — front에 가린 자리(?)가 있고 key가 있어야 한다. 아니면 None."""
+    if not isinstance(c, dict):
+        return None
+    cue = {k: " ".join(str(c.get(k) or "").split())[:120] for k in ("front", "key")}
+    return cue if "?" in cue["front"] and cue["key"] else None
+
+
+def related_json(paraphrases=(), confusables=(), terms=(), exam=None, senses=(), cue=None) -> str:
     def items(xs, keys, limit):
         out = []
         for x in xs if isinstance(xs, list) else []:
@@ -414,9 +472,14 @@ def related_json(paraphrases=(), confusables=(), terms=(), exam=None) -> str:
     cf = items(confusables, ("word", "meaning", "tip"), MAX_CONFUSABLES)
     tm = [x for x in items(terms, ("word", "meaning"), MAX_TERMS) if x["meaning"]]
     ex = clean_exam(exam)
-    if tm or ex:
-        return json.dumps({**({"terms": tm} if tm else {}), **({"exam": ex} if ex else {})}, ensure_ascii=False)
-    return json.dumps({"paraphrases": p, "confusables": cf}, ensure_ascii=False) if p or cf else ""
+    sn = clean_senses(senses)
+    cu = clean_cue(cue)
+    if tm or ex or cu:
+        return json.dumps({**({"terms": tm} if tm else {}), **({"exam": ex} if ex else {}),
+                           **({"cue": cu} if cu else {})}, ensure_ascii=False)
+    # paraphrases 키가 없으면 /api/enrich가 바꿔 말하기를 아직 안 채운 카드로 본다
+    rel = {"paraphrases": p, "confusables": cf} if p or cf else {}
+    return json.dumps({**rel, **({"senses": sn} if sn else {})}, ensure_ascii=False) if rel or sn else ""
 
 
 def has_english_word(formula: str) -> bool:
@@ -484,9 +547,14 @@ def stats(kind: str | None = None):
             # 맞혀서 다음 시험일을 기다리는 단어 수와 그중 가장 이른 시험일
             "test_resting": q(f"select count(*) from words where {MASTERED_VOCAB} and test_due_at > ?", MASTERED_BOX, t),
             "test_next": q(f"select min(test_due_at) from words where {MASTERED_VOCAB} and test_due_at > ?", MASTERED_BOX, t),
-            "tests": q("select count(distinct test_id) from test_answers where verdict is not null"),
+            "tests": q("select count(distinct test_id) from test_answers where verdict is not null")
+                     + q("select count(distinct test_id) from conn_answers where verdict is not null"),
             "tests_grading": q("select count(distinct a.test_id) from test_answers a join tests t on t.id = a.test_id "
-                               "where a.verdict = 'pending' and t.finished_at is not null"),
+                               "where a.verdict = 'pending' and t.finished_at is not null")
+                             + q("select count(distinct a.test_id) from conn_answers a join conn_tests t on t.id = a.test_id "
+                                 "where a.verdict = 'pending' and t.finished_at is not null"),
+            **conn_stats(c),
+            **conn_study_stats(c),
             "jobs_active": q("select count(*) from jobs where status in ('pending','processing')"),
             "today": q("select coalesce(max(reviews),0) from activity where day = ?", kst_day(t)),
             "lc": q("select count(*) from words where lc = 1"),
@@ -505,7 +573,9 @@ def stats(kind: str | None = None):
 NEW_SHARE_MIN, NEW_SHARE_MAX = 0.15, 0.4
 # 복습은 잊었을 위험이 큰 것부터: 복습일이 지난 시간 ÷ 그 단계의 간격. 1일 간격 카드가 3일 밀린 것(3)이 14일 간격
 # 카드가 3일 밀린 것(0.2)보다 먼저 나온다. '모름'으로 0단계가 된 카드는 간격을 0.5일로 쳐서 앞쪽에 온다.
-RISK = ("(? - due_at) * 1.0 / (case box " + " ".join(f"when {b} then {max(d, 0.5) * DAY}" for b, d in enumerate(INTERVALS))
+# 방금 '모름'한 카드(lapsed)는 단계와 상관없이 0단계처럼 0.5일로 쳐서, 단계가 남아 있어도 바로 앞쪽에 온다.
+RISK = (f"(? - due_at) * 1.0 / (case when lapsed = 1 then {0.5 * DAY} "
+        + " ".join(f"when box = {b} then {max(d, 0.5) * DAY}" for b, d in enumerate(INTERVALS))
         + f" else {INTERVALS[-1] * DAY} end)")
 
 
@@ -598,8 +668,9 @@ def local_grade(answer: str, meaning: str) -> str:
 
 
 def demote(c, word_id: int):
-    """테스트에서 틀린 단어는 '모름'과 같이 0단계로 — 다시 학습 카드로 나오고, 테스트 단계도 처음부터."""
-    c.execute("update words set box = 0, due_at = ?, test_box = 0, test_due_at = 0 where id = ?", (now(), word_id))
+    """테스트에서 틀린 단어는 '모름'과 같이 단계를 절반으로 — 바로 다시 학습 카드로 나오고, 테스트 단계는 처음부터."""
+    c.execute("update words set box = box / 2, lapsed = 1, due_at = ?, test_box = 0, test_due_at = 0 where id = ?",
+              (due_after(0), word_id))
 
 
 def test_pass(c, word_id: int):
@@ -611,7 +682,7 @@ def test_pass(c, word_id: int):
     tb = w["test_box"] + 1
     box = min(w["box"] + 1, len(INTERVALS) - 1)
     c.execute(
-        "update words set test_box = ?, test_due_at = ?, box = ?, due_at = ? where id = ?",
+        "update words set test_box = ?, test_due_at = ?, box = ?, due_at = ?, lapsed = 0 where id = ?",
         (tb, due_after(TEST_INTERVALS[min(tb, len(TEST_INTERVALS)) - 1]), box,
          max(w["due_at"], due_after(INTERVALS[box])), word_id),
     )
@@ -652,7 +723,17 @@ def list_tests(limit: int = 30):
             "group by t.id order by t.id desc limit ?",
             (limit,),
         ).fetchall()
-    return [{**dict(r), "grading": bool(r["finished_at"]) and r["pending"] > 0} for r in rows]
+        conn = c.execute(
+            "select t.id, t.created_at, t.finished_at, count(*) as total, "
+            "sum(a.verdict = 'correct') as correct, sum(a.verdict = 'wrong') as wrong, "
+            "sum(a.verdict = 'pending') as pending, sum(a.verdict = 'error') as error "
+            "from conn_tests t join conn_answers a on a.test_id = t.id and a.verdict is not null "
+            "group by t.id order by t.id desc limit ?",
+            (limit,),
+        ).fetchall()
+    out = [{**dict(r), "kind": "vocab"} for r in rows] + [{**dict(r), "kind": "conn"} for r in conn]
+    out.sort(key=lambda r: r["created_at"], reverse=True)
+    return [{**r, "grading": bool(r["finished_at"]) and r["pending"] > 0} for r in out[:limit]]
 
 
 @app.post("/api/tests")
@@ -726,6 +807,227 @@ def finish_test(test_id: int):
                 (json.dumps(payload, ensure_ascii=False), t, t),
             )
         return test_view(c, test_id)
+
+
+# ---------- 연결어 스페셜 테스트 ----------
+# 2026-10-27 사용자 요청: 단어장과 상관없이 토익 빈출 전치사·접속사·접속부사를 암기 테스트처럼 본다.
+# 표제어만 보고 역할(품사)을 전부 고르고 역할마다 뜻을 적는다. 역할이 하나라도 빠지거나 남거나, 뜻 줄
+# 하나라도 못 적으면 오답("하나라도 모르면 틀린 것"). 역할은 즉석 채점, 뜻은 local_grade로 확실하면 정답,
+# 애매하면 시험이 끝난 뒤 AI가 채점한다(grade 작업, payload.kind "conn"). 맞힌 단어는 뒤로 미루고 틀린 단어를 먼저 낸다.
+CONN_ROLES = ("전치사", "부사절 접속사", "명사절 접속사", "접속부사", "등위접속사", "상관접속사", "부사")
+CONN_SIZE = 20
+
+
+def load_conn() -> dict[str, list[dict]]:
+    out: dict[str, list[dict]] = {}
+    with open(CONN_FILE, encoding="utf-8") as f:
+        for line in f:
+            if line.startswith("#") or not line.strip():
+                continue
+            word, pos, meaning, ex, ko = (line.rstrip("\n").split("\t") + [""] * 4)[:5]
+            if pos not in CONN_ROLES:
+                raise ValueError(f"conn-words.tsv: 모르는 역할 {pos!r} ({word})")
+            out.setdefault(word.strip(), []).append({"pos": pos, "meaning": meaning, "example": ex, "example_ko": ko})
+    return out
+
+
+CONN_WORDS = load_conn()
+
+
+class ConnAnswerIn(BaseModel):
+    roles: dict[str, str] = {}  # 고른 역할 → 적은 뜻. 비면 '모르겠어요'
+
+
+def conn_last(c) -> dict[str, tuple[str, int]]:
+    """표제어별 마지막 채점 결과(verdict, 시각). 채점 대기 중인 표제어는 'pending'."""
+    last = {}
+    for r in c.execute("select word, verdict, at from conn_answers where verdict is not null order by id"):
+        last[r["word"]] = (r["verdict"], r["at"] or 0)
+    return last
+
+
+def conn_stats(c) -> dict:
+    last = conn_last(c)
+    return {"conn_total": len(CONN_WORDS),
+            "conn_correct": sum(1 for w in CONN_WORDS if last.get(w, ("",))[0] == "correct"),
+            "conn_wrong": sum(1 for w in CONN_WORDS if last.get(w, ("",))[0] in ("wrong", "error"))}
+
+
+def conn_grade(roles: dict[str, str], senses: list[dict]) -> tuple[str, str | None]:
+    """즉석 채점 → (verdict, reason). 역할이 다르면 wrong, 뜻이 모두 분명히 맞으면 correct, 나머지는 pending."""
+    mine = {k: " ".join(v.split()) for k, v in roles.items() if k in CONN_ROLES}
+    if not mine:
+        return "wrong", None
+    need = {s["pos"] for s in senses}
+    missing = [r for r in CONN_ROLES if r in need and r not in mine]
+    extra = [r for r in CONN_ROLES if r in mine and r not in need]
+    if missing or extra:
+        why = []
+        if missing:
+            why.append("빠진 역할: " + ", ".join(missing))
+        if extra:
+            why.append("이 단어에 없는 역할: " + ", ".join(extra))
+        return "wrong", " · ".join(why)
+    blank = [r for r in mine if not mine[r]]
+    if blank:
+        return "wrong", "뜻을 안 적은 역할: " + ", ".join(blank)
+    for s in senses:  # 같은 역할에 뜻 줄이 여럿이면(since: ~ 때문에 / ~ 이후로) 그 칸에 둘 다 있어야 한다
+        pieces = [x for x in re.split(r"[,/;·]|그리고", mine[s["pos"]]) if x.strip()]
+        if not any(local_grade(x, s["meaning"]) == "correct" for x in pieces):
+            return "pending", None
+    return "correct", None
+
+
+def conn_view(c, test_id: int) -> dict:
+    t = c.execute("select * from conn_tests where id = ?", (test_id,)).fetchone()
+    if not t:
+        raise HTTPException(404)
+    items = []
+    for r in c.execute("select * from conn_answers where test_id = ? order by id", (test_id,)):
+        items.append({"aid": r["id"], "word": r["word"], "senses": CONN_WORDS.get(r["word"], []),
+                      "answer": json.loads(r["answer"]) if r["answer"] else None,
+                      "verdict": r["verdict"], "reason": r["reason"], "graded_by": r["graded_by"]})
+    return {"id": test_id, "kind": "conn", "finished": bool(t["finished_at"]), "items": items,
+            "grading": any(i["verdict"] == "pending" for i in items) and bool(t["finished_at"])}
+
+
+@app.post("/api/conn-tests")
+def create_conn_test(limit: int = CONN_SIZE):
+    """틀린 것 → 처음 보는 것 → 맞힌 것(오래된 순) 순서로 낸다. 같은 묶음 안에서는 섞는다."""
+    limit = max(1, min(limit, 50))
+    t = now()
+    with db() as c:
+        last = conn_last(c)
+        rank = {"wrong": 0, "error": 0, None: 1, "correct": 2}
+        words = [w for w in CONN_WORDS if last.get(w, (None,))[0] != "pending"]
+        random.shuffle(words)
+        words.sort(key=lambda w: (rank.get(last.get(w, (None, 0))[0], 1),
+                                  last[w][1] if last.get(w, (None,))[0] == "correct" else 0))
+        tid = c.execute("insert into conn_tests (created_at) values (?)", (t,)).lastrowid
+        c.executemany("insert into conn_answers (test_id, word) values (?, ?)", [(tid, w) for w in words[:limit]])
+        return conn_view(c, tid)
+
+
+@app.get("/api/conn-tests/{test_id}")
+def get_conn_test(test_id: int):
+    with db() as c:
+        return conn_view(c, test_id)
+
+
+@app.post("/api/conn-tests/{test_id}/answers/{aid}")
+def answer_conn(test_id: int, aid: int, body: ConnAnswerIn):
+    with db() as c:
+        r = c.execute("select word from conn_answers where id = ? and test_id = ?", (aid, test_id)).fetchone()
+        if not r:
+            raise HTTPException(404)
+        roles = {k: v.strip()[:200] for k, v in body.roles.items() if k in CONN_ROLES}
+        verdict, reason = conn_grade(roles, CONN_WORDS.get(r["word"], []))
+        by = "skip" if not roles else ("local" if verdict != "pending" else None)
+        c.execute("update conn_answers set answer = ?, verdict = ?, reason = ?, graded_by = ?, at = ? where id = ?",
+                  (json.dumps(roles, ensure_ascii=False) if roles else None, verdict, reason, by, now(), aid))
+    return {"verdict": verdict, "reason": reason}
+
+
+@app.post("/api/conn-tests/{test_id}/finish")
+def finish_conn_test(test_id: int):
+    """끝내기: 뜻이 애매한 답을 모아 AI 채점(grade, payload.kind 'conn')으로 넘긴다."""
+    t = now()
+    with db() as c:
+        c.execute("update conn_tests set finished_at = coalesce(finished_at, ?) where id = ?", (t, test_id))
+        c.execute("delete from conn_answers where test_id = ? and verdict is null", (test_id,))
+        if not c.execute("select 1 from conn_answers where test_id = ? limit 1", (test_id,)).fetchone():
+            c.execute("delete from conn_tests where id = ?", (test_id,))
+            return {"id": test_id, "kind": "conn", "finished": True, "items": [], "grading": False}
+        rows = c.execute("select id, word, answer from conn_answers where test_id = ? and verdict = 'pending'",
+                         (test_id,)).fetchall()
+        if rows:
+            items = [{"aid": r["id"], "word": r["word"], "answer": json.loads(r["answer"]),
+                      "senses": CONN_WORDS.get(r["word"], [])}  # 예문까지 — AI가 뜻을 예문에 넣어 보고 판정한다
+                     for r in rows]
+            c.execute("insert into jobs (kind, payload, created_at, updated_at) values ('grade', ?, ?, ?)",
+                      (json.dumps({"kind": "conn", "test_id": test_id, "items": items}, ensure_ascii=False), t, t))
+        return conn_view(c, test_id)
+
+
+# ---------- 연결어 단어 보기 ----------
+# 전치사·접속사·접속부사를 테스트 전에 외우는 플래시카드(2026-11-01, 사용자 요청 — "퀴즈보다 외우는 부분이 약해서
+# 전접부만 따로 단어 보기"). 목록은 테스트와 같은 conn-words.tsv, 단계는 conn_study에 따로 둔다(단어장 words와 무관).
+# '알아요/모름'은 학습 카드와 같은 규칙(INTERVALS, 모름이면 단계 절반 + 바로 다시). 순서는 복습할 것(방금 모름·
+# 마지막 테스트 오답이 맨 앞) → 처음 보는 것 → 아직 복습일이 안 된 것(이른 순, 더 보고 싶을 때만 나온다).
+class ConnReviewIn(BaseModel):
+    word: str
+    known: bool
+
+
+class ConnUndoIn(BaseModel):
+    word: str
+    prev: dict | None = None  # review가 돌려준 넘기기 전 행(처음 본 단어면 None)
+
+
+def conn_card(word: str) -> dict:
+    return {"word": word, "senses": CONN_WORDS[word]}
+
+
+def conn_study_rows(c) -> dict[str, sqlite3.Row]:
+    return {r["word"]: r for r in c.execute("select * from conn_study")}
+
+
+def conn_study_stats(c) -> dict:
+    t, rows = now(), conn_study_rows(c)
+    seen = [rows[w] for w in CONN_WORDS if w in rows]
+    return {"conn_study_due": sum(1 for r in seen if r["due_at"] <= t),
+            "conn_study_new": len(CONN_WORDS) - len(seen),
+            "conn_study_mastered": sum(1 for r in seen if r["box"] >= MASTERED_BOX)}
+
+
+@app.get("/api/conn-cards")
+def conn_cards(limit: int = CONN_SIZE):
+    limit = max(1, min(limit, 60))
+    t = now()
+    with db() as c:
+        rows, last = conn_study_rows(c), conn_last(c)
+        words = list(CONN_WORDS)
+        random.shuffle(words)
+
+        def key(w):
+            r = rows.get(w)
+            wrong = last.get(w, ("",))[0] in ("wrong", "error")
+            if r is None:
+                return (0 if wrong else 2, 0)
+            if r["due_at"] <= t:
+                return (0 if r["lapsed"] or wrong else 1, r["box"])
+            return (3, r["due_at"])
+        words.sort(key=key)
+        return {"items": [conn_card(w) for w in words[:limit]], **conn_study_stats(c)}
+
+
+@app.post("/api/conn-cards/review")
+def conn_review(body: ConnReviewIn):
+    if body.word not in CONN_WORDS:
+        raise HTTPException(404)
+    with db() as c:
+        r = c.execute("select * from conn_study where word = ?", (body.word,)).fetchone()
+        prev = dict(r) if r else None
+        b = r["box"] if r else 0
+        box = min(b + 1, len(INTERVALS) - 1) if body.known else b // 2
+        due = due_after(INTERVALS[box]) if body.known else due_after(0)
+        c.execute("insert into conn_study (word, box, due_at, lapsed, seen, known) values (?, ?, ?, ?, 1, ?) "
+                  "on conflict(word) do update set box = excluded.box, due_at = excluded.due_at, "
+                  "lapsed = excluded.lapsed, seen = seen + 1, known = known + excluded.known",
+                  (body.word, box, due, int(not body.known), int(body.known)))
+    return {"box": box, "due_at": due, "prev": prev}
+
+
+@app.post("/api/conn-cards/undo")
+def conn_undo(body: ConnUndoIn):
+    with db() as c:
+        if body.prev is None:
+            c.execute("delete from conn_study where word = ?", (body.word,))
+        else:
+            p = body.prev
+            c.execute("update conn_study set box = ?, due_at = ?, lapsed = ?, seen = ?, known = ? where word = ?",
+                      (int(p["box"]), int(p["due_at"]), int(p["lapsed"]), int(p["seen"]), int(p["known"]), body.word))
+    return {"ok": True}
 
 
 # ---------- LC 단어 체크 ----------
@@ -962,14 +1264,19 @@ def delete_session():
 @app.post("/api/words/{word_id}/review")
 def review(word_id: int, body: ReviewIn):
     with db() as c:
-        r = c.execute("select box, due_at from words where id = ?", (word_id,)).fetchone()
+        r = c.execute("select box, due_at, lapsed from words where id = ?", (word_id,)).fetchone()
         if not r:
             raise HTTPException(404)
-        box = min(r["box"] + 1, len(INTERVALS) - 1) if body.known else 0
-        due = due_after(INTERVALS[box])
+        # '모름'이면 단계를 절반으로(5→2, 3→1, 1→0) 내리고 바로 다시 복습한다(2026-10-28, 사용자 요청 — 전엔 0단계로
+        # 돌려서, 30일 간격까지 간 카드도 한 번 헷갈리면 처음부터 다시 쌓아야 했다). 다음 '알아요'는 내린 단계 + 1.
+        if body.known:
+            box, due = min(r["box"] + 1, len(INTERVALS) - 1), None
+        else:
+            box, due = r["box"] // 2, due_after(0)
+        due = due if due is not None else due_after(INTERVALS[box])
         c.execute(
-            "update words set box = ?, due_at = ?, seen = seen + 1, known = known + ? where id = ?",
-            (box, due, int(body.known), word_id),
+            "update words set box = ?, due_at = ?, lapsed = ?, seen = seen + 1, known = known + ? where id = ?",
+            (box, due, int(not body.known), int(body.known), word_id),
         )
         day = kst_day(now())
         c.execute(
@@ -978,8 +1285,8 @@ def review(word_id: int, body: ReviewIn):
             (day,),
         )
     # 앱의 되돌리기가 이 값을 그대로 /undo에 보낸다
-    undo = {"box": r["box"], "due_at": r["due_at"], "known": body.known, "day": day}
-    return {"box": box, "due_at": due, "undo": undo}
+    undo = {"box": r["box"], "due_at": r["due_at"], "lapsed": r["lapsed"], "known": body.known, "day": day}
+    return {"box": box, "due_at": due, "lapsed": int(not body.known), "undo": undo}
 
 
 @app.post("/api/words/{word_id}/undo")
@@ -989,8 +1296,8 @@ def undo_review(word_id: int, body: UndoIn):
         raise HTTPException(400, "box 범위 밖")
     with db() as c:
         n = c.execute(
-            "update words set box = ?, due_at = ?, seen = max(seen - 1, 0), known = max(known - ?, 0) where id = ?",
-            (body.box, body.due_at, int(body.known), word_id),
+            "update words set box = ?, due_at = ?, lapsed = ?, seen = max(seen - 1, 0), known = max(known - ?, 0) where id = ?",
+            (body.box, body.due_at, body.lapsed, int(body.known), word_id),
         ).rowcount
         if not n:
             raise HTTPException(404)
@@ -1220,9 +1527,11 @@ def result(job_id: int, body: ResultIn, x_worker_token: str | None = Header(None
                 (status, body.error[:2000], t, job_id),
             )
             if status == "error" and r["kind"] == "grade":
-                aids = [i["aid"] for i in json.loads(r["payload"])["items"]]
+                payload = json.loads(r["payload"])
+                aids = [i["aid"] for i in payload["items"]]
+                table = "conn_answers" if payload.get("kind") == "conn" else "test_answers"
                 c.execute(
-                    f"update test_answers set verdict = 'error', reason = 'AI 채점 실패' "
+                    f"update {table} set verdict = 'error', reason = 'AI 채점 실패' "
                     f"where verdict = 'pending' and id in ({','.join('?' * len(aids))})",
                     aids,
                 )
@@ -1232,8 +1541,8 @@ def result(job_id: int, body: ResultIn, x_worker_token: str | None = Header(None
             d = clean(w)
             if not d["word"] or not d["meaning"]:
                 continue
-            rel = (related_json(w.paraphrases, w.confusables) if d["kind"] == "vocab"
-                   else related_json(terms=w.terms, exam=w.exam))
+            rel = (related_json(w.paraphrases, w.confusables, senses=w.senses) if d["kind"] == "vocab"
+                   else related_json(terms=w.terms, exam=w.exam, cue=w.cue))
             cur = c.execute(
                 "insert into words (word,pos,meaning,example,example_ko,kind,source,job_id,due_at,created_at,related,freq) "
                 "values (?,?,?,?,?,?,?,?,?,?,?,?) on conflict(word) do nothing",
@@ -1264,11 +1573,13 @@ def apply_related(c, job_id, body, t):
         row = c.execute("select kind, related from words where id = ?", (it.id,)).fetchone()
         if not row:
             continue
-        if row["kind"] == "vocab":
-            rel = related_json(it.paraphrases, it.confusables)
-        else:  # 문법: 이미 있는 출제 유형은 그대로 두고 단어 뜻만 채운다
-            old = json.loads(row["related"]) if row["related"] else {}
-            rel = related_json(terms=it.terms, exam=old.get("exam"))
+        old = json.loads(row["related"]) if row["related"] else {}
+        if row["kind"] == "vocab" and it.senses:  # 품사별 예문만 채우는 작업 — 바꿔 말하기는 그대로
+            rel = related_json(old.get("paraphrases"), old.get("confusables"), senses=it.senses)
+        elif row["kind"] == "vocab":
+            rel = related_json(it.paraphrases, it.confusables, senses=old.get("senses"))
+        else:  # 문법: 이미 있는 출제 유형·앞면 단서는 그대로 두고 단어 뜻만 채운다
+            rel = related_json(terms=it.terms, exam=old.get("exam"), cue=old.get("cue"))
         if rel:
             done += c.execute("update words set related = ? where id = ?", (rel, it.id)).rowcount
     res = {"added": [], "duplicates": [], "filled": done}
@@ -1349,20 +1660,27 @@ def rank(limit: int | None = None):
 @app.post("/api/enrich")
 def enrich():
     """related가 비어 있는 카드를 ENRICH_BATCH개씩 AI 작업으로 넘긴다 — 어휘는 바꿔 말하기·헷갈리는 단어,
-    문법은 공식 속 영어 단어 뜻(영어 단어가 있는 공식만). 종류별로 작업을 나눈다(payload.kind).
-    이미 대기 중인 enrich 작업에 들어간 카드는 다시 넣지 않는다."""
+    문법은 공식 속 영어 단어 뜻(영어 단어가 있는 공식만), 품사가 여럿인 어휘는 둘째 줄부터의 품사별 예문
+    (payload.kind 'senses'). 종류별로 작업을 나눈다(payload.kind).
+    이미 대기 중인 같은 종류의 enrich 작업에 들어간 카드는 다시 넣지 않는다."""
     t = now()
     with db() as c:
-        queued = set()
+        queued = {k: set() for k in (*KINDS, "senses")}
         for (p,) in c.execute("select payload from jobs where kind = 'enrich' and status in ('pending','processing')"):
-            queued.update(i["id"] for i in json.loads(p)["items"])
+            p = json.loads(p)
+            queued[p.get("kind", "vocab")].update(i["id"] for i in p["items"])
+        where = {"vocab": "kind = 'vocab' and related not like '%\"paraphrases\"%'",
+                 "grammar": "kind = 'grammar' and related not like '%\"terms\"%'",
+                 "senses": "kind = 'vocab' and (meaning like '%' || char(10) || '%' or meaning like '%;%') "
+                           "and related not like '%\"senses\"%'"}
         jobs, total = [], 0
-        for kind in KINDS:
+        for kind, cond in where.items():
             rows = [dict(r) for r in c.execute(
-                "select id, word, pos, meaning from words where kind = ? and meaning != '' and "
-                + ("related = ''" if kind == "vocab" else "related not like '%\"terms\"%'") + " order by id",
-                (kind,),
-            ) if r["id"] not in queued and (kind == "vocab" or has_english_word(r["word"]))]
+                f"select id, word, pos, meaning, example from words where meaning != '' and {cond} order by id"
+            ) if r["id"] not in queued[kind] and (kind != "grammar" or has_english_word(r["word"]))]
+            for r in rows:
+                if kind != "senses":
+                    r.pop("example")
             total += len(rows)
             for i in range(0, len(rows), ENRICH_BATCH):
                 payload = json.dumps({"kind": kind, "items": rows[i : i + ENRICH_BATCH]}, ensure_ascii=False)
@@ -1374,22 +1692,26 @@ def enrich():
 
 def apply_grades(c, job_id, job, body, t):
     """AI 채점 결과를 답안에 반영하고, 오답 단어는 0단계로 내린다."""
-    aids = {i["aid"] for i in json.loads(job["payload"])["items"]}
+    payload = json.loads(job["payload"])
+    aids = {i["aid"] for i in payload["items"]}
+    # 연결어 테스트(payload.kind 'conn')는 conn_answers에 쓰고, 단어장 단계는 건드리지 않는다
+    table = "conn_answers" if payload.get("kind") == "conn" else "test_answers"
     done = 0
     for g in body.grades:
         if g.aid not in aids:
             continue
         verdict = "correct" if g.correct else "wrong"
         c.execute(
-            "update test_answers set verdict = ?, reason = ?, graded_by = 'ai' where id = ? and verdict = 'pending'",
+            f"update {table} set verdict = ?, reason = ?, graded_by = 'ai' where id = ? and verdict = 'pending'",
             (verdict, g.reason[:300], g.aid),
         )
-        row = c.execute("select word_id from test_answers where id = ?", (g.aid,)).fetchone()
-        (test_pass if g.correct else demote)(c, row["word_id"])
+        if table == "test_answers":
+            row = c.execute("select word_id from test_answers where id = ?", (g.aid,)).fetchone()
+            (test_pass if g.correct else demote)(c, row["word_id"])
         done += 1
     # 모델이 빠뜨린 문항은 실패로 표시(무한 대기 방지)
     c.execute(
-        f"update test_answers set verdict = 'error', reason = 'AI가 채점하지 않음' "
+        f"update {table} set verdict = 'error', reason = 'AI가 채점하지 않음' "
         f"where verdict = 'pending' and id in ({','.join('?' * len(aids))})",
         tuple(aids),
     )

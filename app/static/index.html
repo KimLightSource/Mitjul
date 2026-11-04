@@ -41,6 +41,7 @@
   <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 3.2l2.6 5.5 6 .8-4.4 4.1 1.1 5.9L12 16.6l-5.3 2.9 1.1-5.9-4.4-4.1 6-.8L12 3.2Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
   <symbol id="i-headphones" viewBox="0 0 24 24"><path d="M4 15v-3a8 8 0 0 1 16 0v3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><rect x="3" y="14" width="5" height="7" rx="2" fill="currentColor"/><rect x="16" y="14" width="5" height="7" rx="2" fill="currentColor"/></symbol>
   <symbol id="i-blank" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 8h8M8 12.5h2.5M13.5 12.5H16M8 17h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3.1-3.1a4 4 0 0 0-5.7-5.7L11.6 6.7M14 10a4 4 0 0 0-5.7 0l-3.1 3.1a4 4 0 0 0 5.7 5.7l1.5-1.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
   <symbol id="i-pen" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
 </svg>
 
@@ -114,6 +115,18 @@
       <span class="test-entry-text"><b>파트 5 문제</b><small id="quiz-entry-sub">내 카드로 만든 빈칸 문제 10개</small></span>
       <span class="test-entry-go">›</span>
     </button>
+    <!-- 전접부 단어 보기: 연결어 목록을 플래시카드로 외운다(테스트 전 암기용, 간격 반복은 단어장과 따로) -->
+    <button id="btn-cs" class="test-entry cs-entry">
+      <span class="test-entry-icon conn-icon"><svg><use href="#i-book"/></svg></span>
+      <span class="test-entry-text"><b>전접부 단어 보기</b><small id="cs-entry-sub">전치사·접속사·접속부사 — 품사별 뜻과 예문 외우기</small></span>
+      <span class="test-entry-go">›</span>
+    </button>
+    <!-- 연결어 스페셜 테스트: 단어장과 상관없이 빈출 전치사·접속사·접속부사 — 역할을 전부 고르고 역할마다 뜻 쓰기 -->
+    <button id="btn-conn" class="test-entry conn-entry">
+      <span class="test-entry-icon conn-icon"><svg><use href="#i-link"/></svg></span>
+      <span class="test-entry-text"><b>연결어 스페셜 테스트</b><small id="conn-entry-sub">전치사·접속사·접속부사 — 품사 전부 맞혀야 정답</small></span>
+      <span class="test-entry-go">›</span>
+    </button>
   </div>
 
   <div id="study-run" class="study-run" hidden>
@@ -152,13 +165,21 @@
           <p id="card-hint" class="hint">탭해서 뜻 보기</p>
         </div>
         <div id="card-back" class="card-back" hidden>
+          <div id="card-cue" class="cue-key" hidden>
+            <div class="cue-label">정답</div>
+            <div id="card-cue-key" class="cue-answer"></div>
+            <div class="cue-label">공식</div>
+            <div id="card-cue-formula"></div>
+          </div>
           <div id="card-senses" class="senses"></div>
           <div id="card-exam" class="exam" hidden></div>
           <div class="example" data-speak="example">
+            <span id="card-example-pos" class="pos" hidden></span>
             <p id="card-example" class="example-en"></p>
             <p id="card-example-ko" class="example-ko"></p>
             <span class="example-hint"><svg><use href="#i-speaker"/></svg>탭하면 읽어줘요 · 모르는 단어는 꾹 눌러 추가</span>
           </div>
+          <div id="card-sense-examples" class="sense-examples"></div>
           <div id="card-related" class="related" hidden></div>
         </div>
       </div>
@@ -262,12 +283,18 @@
   </div>
   <div id="test-q" class="test-q">
     <div class="test-card">
-      <span class="chip test-chip">암기 테스트</span>
+      <span id="test-chip" class="chip test-chip">암기 테스트</span>
       <div id="test-word" class="test-word"></div>
       <button id="test-speak" class="speak" aria-label="발음 듣기"><svg><use href="#i-speaker"/></svg></button>
     </div>
     <form id="test-form" class="test-form" autocomplete="off">
       <input id="test-input" placeholder="뜻을 한국어로 적어 보세요" enterkeyhint="done" autocomplete="off">
+      <!-- 연결어 테스트: 역할 칩을 고르면 그 역할의 뜻 칸이 열린다 -->
+      <div id="conn-form" class="conn-form" hidden>
+        <p class="conn-help">해당하는 품사를 <b>전부</b> 고르고, 품사마다 뜻을 적어요</p>
+        <div id="conn-roles" class="conn-roles"></div>
+        <div id="conn-inputs" class="conn-inputs"></div>
+      </div>
       <div class="test-actions">
         <button type="button" id="test-skip" class="btn-text">모르겠어요</button>
         <button type="submit" class="btn-fab test-submit">제출</button>
@@ -317,6 +344,37 @@
     <ul id="lc-list" class="test-list"></ul>
     <button id="lc-more" class="btn-tonal wide">20개 더</button>
     <button id="lc-close" class="btn-fab">완료</button>
+  </div>
+</section>
+
+<!-- 전접부 단어 보기: 표제어 → 탭하면 품사(역할)별 뜻·예문 → 알아요/모름 -->
+<section id="cs-screen" class="test-screen" hidden>
+  <div class="progress-row">
+    <button id="cs-quit" class="icon-btn" aria-label="그만하기"><svg><use href="#i-x"/></svg></button>
+    <div class="progress"><div id="cs-bar"></div></div>
+    <span id="cs-count" class="count">0/0</span>
+    <button id="cs-undo" class="icon-btn" aria-label="되돌리기" title="되돌리기 (Backspace)" disabled><svg><use href="#i-undo"/></svg></button>
+  </div>
+  <div id="cs-q" class="test-q">
+    <div id="cs-card" class="test-card cs-card" role="button" tabindex="0">
+      <span class="chip cs-chip" id="cs-chip"></span>
+      <span id="cs-word" class="test-word"></span>
+      <span id="cs-roles" class="cs-roles"></span>
+      <div id="cs-back" class="cs-back" hidden></div>
+      <span id="cs-hint" class="hint">품사가 몇 개인지, 뜻이 뭔지 떠올려 보고 탭하세요</span>
+    </div>
+    <div class="swipe-buttons">
+      <button id="cs-dunno" class="choice dunno"><svg><use href="#i-x"/></svg>모름</button>
+      <button id="cs-know" class="choice know"><svg><use href="#i-check"/></svg>알아요</button>
+    </div>
+  </div>
+  <div id="cs-result" class="test-result" hidden>
+    <div class="done-badge"><svg><use href="#i-book"/></svg></div>
+    <h2 id="cs-result-title" class="center"></h2>
+    <p id="cs-result-sub" class="muted center"></p>
+    <ul id="cs-list" class="test-list"></ul>
+    <button id="cs-more" class="btn-tonal wide">20개 더</button>
+    <button id="cs-close" class="btn-fab">완료</button>
   </div>
 </section>
 
