@@ -886,13 +886,23 @@ async function loadStats() {
     $("#st-total").textContent = s.total;
     $("#st-mastered").textContent = s.mastered;
     $("#st-streak").textContent = s.streak;
-    $("#st-today").textContent = s.today;
-    // 세트는 복습과 새 단어를 쌓인 비율대로 섞어서 낸다 — 다음 세트 구성을 보여 준다
+    // 오늘 목표: 밀린 복습을 일주일에 나눠 갚는 양(세트 단위). 복습일을 따르는 범위에만 있다.
+    const goal = s.goal || 0;
+    $("#st-today-line").innerHTML = !goal
+      ? `오늘 <b>${s.today}</b>번 넘겼어요`
+      : s.today >= goal
+      ? `오늘 목표 <b>${goal}</b> 달성 · <b>${s.today}</b>번 넘겼어요`
+      : `오늘 <b>${s.today}</b> / 목표 <b>${goal}</b> · ${Math.ceil((goal - s.today) / 20)}세트 남음`;
+    // 세트는 복습과 새 단어를 쌓인 비율대로 섞어서 낸다 — 다음 세트 구성을 보여 준다.
+    // 밀린 복습이 backlog_max를 넘으면 새 단어는 쉰다(복습만).
     const mix = s.mix && s.mix.new + s.mix.review ? s.mix : null;
     $("#st-mix").hidden = !mix;
-    if (mix) $("#st-mix").innerHTML = `다음 세트 복습 <b>${mix.review}</b> · 새 단어 <b>${mix.new}</b>`;
-    // 링: 오늘 넘긴 수 / (넘긴 수 + 남은 복습). 다 끝내면 꽉 찬다.
-    const pct = s.today + s.due ? (s.today / (s.today + s.due)) * 100 : 0;
+    if (mix) $("#st-mix").innerHTML = s.new_paused
+      ? `밀린 복습 <b>${s.backlog}</b>장 — ${s.backlog_max}장 아래로 줄면 새 단어 ${s.new_paused}개가 다시 나와요`
+      : `다음 세트 복습 <b>${mix.review}</b> · 새 단어 <b>${mix.new}</b>`;
+    // 링: 목표가 있으면 오늘 넘긴 수 / 목표, 없으면(북마크·자주 모름) 넘긴 수 / (넘긴 수 + 남은 카드).
+    const pct = goal ? Math.min(s.today / goal, 1) * 100
+      : s.today + s.due ? (s.today / (s.today + s.due)) * 100 : 0;
     requestAnimationFrame(() => $("#ring").style.setProperty("--p", pct.toFixed(1)));
     $("#study-empty").hidden = s.due > 0;
     // 북마크 범위는 복습일과 상관없이 북마크 전부를 낸다
@@ -1045,6 +1055,59 @@ function examHtml(w) {
     <p class="exam-q" data-say="${esc(filled)}">${esc(before)}<span class="exam-blank">${esc(e.answer)}</span>${esc(after)}</p>
     <div class="exam-choices">${choices.map((c, i) =>
       `<span class="${c === e.answer ? "ok" : ""}">(${"ABCDE"[i]}) ${esc(c)}</span>`).join("")}</div>`;
+}
+
+// ---------- 문법 카드 앞면 문제 ----------
+// 2026-11-17, 사용자 요청 — 핵심을 ?로 가린 공식만으로는 무슨 주제인지 알 수 없어서, 앞면을 파트 5처럼 문제로 낸다.
+// 문제 묶음(related.exams, AI가 대표 단어·갈래마다 만든 4~8문제) + 목록 예시(exam) 중 하나를 매번 고르고
+// (지난번에 이 카드에서 본 문제는 피함) 보기 순서도 매번 섞는다 — 같은 문장의 답을 외워 버리지 않게.
+let gq = null; // 지금 카드의 문제 {e, order, picked} — picked: 고른 보기 번호, -1이면 고르지 않고 뒤집음
+function gramQuestions(w) {
+  const r = relatedOf(w);
+  return [...(r.exams || []), ...(r.exam ? [r.exam] : [])];
+}
+function pickGramQuestion(w) {
+  const pool = gramQuestions(w);
+  if (!pool.length) return null;
+  let last = {};
+  try { last = JSON.parse(localStorage.getItem("gramLastQ") || "{}") || {}; } catch {}
+  const cands = pool.length > 1 ? pool.filter((e) => e.q !== last[w.id]) : pool;
+  const e = cands[Math.floor(Math.random() * cands.length)];
+  last[w.id] = e.q;
+  try { localStorage.setItem("gramLastQ", JSON.stringify(last)); } catch {}
+  return { e, order: shuffle([...e.choices]), picked: null };
+}
+function gramFrontHtml(q) {
+  const [before, after = ""] = q.e.q.split(/_{3,}/);
+  const done = q.picked !== null;
+  return `<p class="gq-q">${esc(before)}<span class="gq-blank${done ? " filled" : ""}">${done ? esc(q.e.answer) : ""}</span>${esc(after)}</p>
+    <div class="quiz-choices gq-choices">${q.order.map((c, k) => {
+      const cls = done && c === q.e.answer ? "ok" : done && k === q.picked ? "bad" : "";
+      return `<button type="button" data-choice="${k}" class="${cls}"><b>(${"ABCD"[k]})</b><span>${esc(c)}</span></button>`;
+    }).join("")}</div>`;
+}
+// 뒷면의 "이 문제" 박스 — 출제 유형, 정답을 채운 문장(누르면 읽음), 해석, 한 줄 해설
+function gramExamHtml(q) {
+  const [before, after = ""] = q.e.q.split(/_{3,}/);
+  return `<div class="exam-title">이 문제 <span>${esc(q.e.type || "")}</span></div>
+    <p class="exam-q" data-say="${esc(before + q.e.answer + after)}">${esc(before)}<span class="exam-blank">${esc(q.e.answer)}</span>${esc(after)}</p>
+    ${q.e.ko ? `<p class="exam-ko">${esc(q.e.ko)}</p>` : ""}${q.e.tip ? `<p class="exam-tip">${esc(q.e.tip)}</p>` : ""}`;
+}
+function renderGramFront() {
+  $("#card-word").innerHTML = gramFrontHtml(gq);
+}
+function clearSuggest() {
+  for (const id of ["#btn-know", "#btn-dunno"]) $(id).classList.toggle("suggest", false);
+}
+function pickChoice(k) {
+  if (!gq || gq.picked !== null || busy) return;
+  gq.picked = k;
+  const right = gq.order[k] === gq.e.answer;
+  renderGramFront();
+  buzz(right ? 12 : [20, 40, 20]);
+  // 맞히면 '알아요', 틀리면 '모름' 버튼을 살짝 강조한다 — 넘기는 건 그래도 직접(규칙은 알았는데 실수했을 수도 있으니)
+  $(right ? "#btn-know" : "#btn-dunno").classList.toggle("suggest", true);
+  reveal();
 }
 
 // 공식에서 예문 속에 나타날 영어 표현을 뽑는다.
@@ -1204,14 +1267,20 @@ function showCard() {
   revealed = false;
   const g = isGrammar(w);
   card.classList.toggle("grammar", g);
-  // 문법 카드: 앞면 단서가 있으면 핵심을 가린 단서를 앞면에, 정답·공식은 뒤집으면 보여 준다
+  // 문법 카드: 문제가 있으면 앞면에 파트 5 문제(보기를 고르면 뒤집힘), 없으면 앞면 단서(핵심을 ?로 가린 공식),
+  // 그것도 없으면 공식. 뒷면에는 가린 핵심과 전체 공식이 나온다.
   const cue = g ? relatedOf(w).cue : null;
-  if (g) $("#card-word").innerHTML = formulaHtml(cue ? cue.front : w.word);
+  gq = g ? pickGramQuestion(w) : null;
+  if (gq) renderGramFront();
+  else if (g) $("#card-word").innerHTML = formulaHtml(cue ? cue.front : w.word);
   else $("#card-word").textContent = w.word;
-  $("#card-cue").hidden = !cue;
+  card.classList.toggle("gq", !!gq);
+  $("#card-cue").hidden = !(cue || gq);
+  $("#card-cue-key-label").hidden = $("#card-cue-key").hidden = !cue;
   $("#card-cue-key").textContent = cue ? cue.key : "";
-  $("#card-cue-formula").innerHTML = cue ? formulaHtml(w.word) : "";
-  $("#card-hint").textContent = cue ? "떠올려 보고 탭해서 확인" : "탭해서 뜻 보기";
+  $("#card-cue-formula").innerHTML = cue || gq ? formulaHtml(w.word) : "";
+  $("#card-hint").textContent = gq ? "알맞은 보기를 골라 보세요" : cue ? "떠올려 보고 탭해서 확인" : "탭해서 뜻 보기";
+  clearSuggest();
   const [label, cls] = boxLabel(w);
   $("#card-box").textContent = g ? label.replace("단어", "공식") : label;
   $("#card-box").className = "chip " + (g ? "grammar" : cls);
@@ -1227,7 +1296,7 @@ function showCard() {
   $("#card-senses").innerHTML = sensesHtml(w);
   $("#card-senses").classList.toggle("multi", senses(w).length > 1);
   $("#card-example").innerHTML = g ? highlightGrammar(w.example, w.word, relatedOf(w).terms) : highlight(w.example, w.word);
-  const exam = g ? examHtml(w) : "";
+  const exam = gq ? gramExamHtml(gq) : g ? examHtml(w) : "";
   $("#card-exam").innerHTML = exam;
   $("#card-exam").hidden = !exam;
   $("#card-example-ko").textContent = w.example_ko;
@@ -1290,6 +1359,7 @@ $("#card-star").addEventListener("click", () => {
 function reveal() {
   if (revealed) return;
   revealed = true;
+  if (gq && gq.picked === null) { gq.picked = -1; renderGramFront(); } // 고르지 않고 뒤집으면 정답만 표시
   $("#card").classList.add("revealed");
   $("#card-back").hidden = false;
   $("#card-hint").hidden = true;
@@ -1416,6 +1486,8 @@ function finishSet() {
     }
     // 탭: 뜻을 펼치고, 단어/예문을 눌렀으면 읽어준다
     if (selectedText()) return; // 예문에서 단어를 고른 것 — 추가 버튼이 대신 뜬다
+    const choice = e.target.closest("[data-choice]");
+    if (choice && gq && gq.picked === null) return pickChoice(+choice.dataset.choice); // 문법 카드 앞면 보기
     const say = e.target.closest("[data-say]");
     if (say && revealed) return speak(say.dataset.say); // 헷갈리는 단어·바꿔 말하기·공식 속 단어
     const target = e.target.closest("[data-speak]");
@@ -1481,6 +1553,7 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "ArrowRight" || e.key === "2") decide(true);
   else if (e.key === "ArrowLeft" || e.key === "1") decide(false);
   else if (e.key === " ") { e.preventDefault(); reveal(); if (!isGrammar(queue[pos])) speak(queue[pos].word); }
+  else if (gq && /^[a-dA-D]$/.test(e.key)) pickChoice("abcd".indexOf(e.key.toLowerCase())); // 문법 카드 앞면 보기
 });
 
 // 학습 화면의 억양 버튼. 누르면 바로 바꾸고 지금 카드를 그 억양으로 다시 읽는다.

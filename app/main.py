@@ -345,6 +345,7 @@ class RelatedIn(BaseModel):
     confusables: list[dict] = []
     senses: list[dict] = []  # 품사별 예문 채우기(payload.kind 'senses') 결과
     terms: list[dict] = []
+    exams: list[dict] = []  # 문법 카드 앞면 문제 묶음 채우기(payload.kind 'exams') 결과
 
 
 class FreqIn(BaseModel):
@@ -418,10 +419,12 @@ def clean(w: WordIn) -> dict:
 #                  품사별 예문, 2026-10-26. 첫 줄 품사의 예문은 words.example 그대로)
 #               = {"terms": [{word, meaning}], "exam": {type, q, choices, answer}, "cue": {front, key}} (문법 공식 —
 #                 공식 속 영어 단어의 뜻과 토익 출제 유형(2026-10-17), 앞면 회상 단서(2026-10-27): front는 핵심을 ?로
-#                 가린 공식, key는 가린 핵심)
+#                 가린 공식, key는 가린 핵심),
+#                 "exams": [{type, q, choices, answer, ko, tip}] (앞면 문제 묶음, 2026-11-17: 공식 하나로 대표 단어·
+#                 갈래마다, 오답 유형을 섞어 만든 4~8문제. 앞면이 매번 이 중 하나와 exam을 골라 보기를 섞어 낸다)
 # 카드 뒷면에 참고용으로만 보여 준다. 헷갈리는 단어를 카드로 만들어 짝으로 묶던 방식은 쉬운 파생어 카드가
 # 수백 개 생겨서 하루 만에 뺐다(2026-10-05, 사용자 결정).
-MAX_PARAPHRASES, MAX_CONFUSABLES, MAX_TERMS, MAX_SENSES = 3, 2, 24, 3
+MAX_PARAPHRASES, MAX_CONFUSABLES, MAX_TERMS, MAX_SENSES, MAX_EXAMS = 3, 2, 24, 3, 8
 
 
 def clean_exam(e):
@@ -433,7 +436,24 @@ def clean_exam(e):
           "choices": choices, "answer": " ".join(str(e.get("answer") or "").split())}
     if "___" not in ex["q"] or not 2 <= len(choices) <= 5 or ex["answer"] not in choices:
         return None
+    # 앞면 문제 묶음(exams)은 정답 문장의 해석·한 줄 해설을 같이 둔다
+    for k in ("ko", "tip"):
+        if str(e.get(k) or "").strip():
+            ex[k] = " ".join(str(e[k]).split())[:200]
     return ex
+
+
+def clean_exams(xs, base=None):
+    """앞면 문제 묶음 — 보기 4개가 서로 다르고 빈칸이 하나인 문제만, 같은 문장·목록 예시(base)와 같은 문장은 뺀다."""
+    out, seen = [], {(base or {}).get("q")}
+    for x in xs if isinstance(xs, list) else []:
+        ex = clean_exam(x)
+        if not ex or len(ex["choices"]) != 4 or len(set(ex["choices"])) != 4 or ex["q"].count("___") != 1 \
+                or len(re.findall(r"_{3,}", ex["q"])) != 1 or ex["q"] in seen:
+            continue
+        seen.add(ex["q"])
+        out.append(ex)
+    return out[:MAX_EXAMS]
 
 
 def clean_senses(xs):
@@ -458,7 +478,7 @@ def clean_cue(c):
     return cue if "?" in cue["front"] and cue["key"] else None
 
 
-def related_json(paraphrases=(), confusables=(), terms=(), exam=None, senses=(), cue=None) -> str:
+def related_json(paraphrases=(), confusables=(), terms=(), exam=None, senses=(), cue=None, exams=()) -> str:
     def items(xs, keys, limit):
         out = []
         for x in xs if isinstance(xs, list) else []:
@@ -474,9 +494,10 @@ def related_json(paraphrases=(), confusables=(), terms=(), exam=None, senses=(),
     ex = clean_exam(exam)
     sn = clean_senses(senses)
     cu = clean_cue(cue)
-    if tm or ex or cu:
+    exs = clean_exams(exams, ex)
+    if tm or ex or cu or exs:
         return json.dumps({**({"terms": tm} if tm else {}), **({"exam": ex} if ex else {}),
-                           **({"cue": cu} if cu else {})}, ensure_ascii=False)
+                           **({"cue": cu} if cu else {}), **({"exams": exs} if exs else {})}, ensure_ascii=False)
     # paraphrases 키가 없으면 /api/enrich가 바꿔 말하기를 아직 안 채운 카드로 본다
     rel = {"paraphrases": p, "confusables": cf} if p or cf else {}
     return json.dumps({**rel, **({"senses": sn} if sn else {})}, ensure_ascii=False) if rel or sn else ""
@@ -533,12 +554,20 @@ def stats(kind: str | None = None):
     kf, ka, by_due = kind_filter(kind)
     with db() as c:
         rank_refill(c)  # 중요도가 없는 카드(직접 넣은 카드 등)가 있으면 AI 작업으로 넘긴다
+        exams_refill(c)  # 앞면 문제 묶음이 없는 문법 카드도 조금씩 넘긴다
         q = lambda sql, *a: c.execute(sql, a).fetchone()[0]
+        n_new, n_rev = due_counts(c, kf, ka)
+        today = q("select coalesce(max(reviews),0) from activity where day = ?", kst_day(t))
         return {
             "total": q("select count(*) from words"),
             "due": q("select count(*) from words where meaning != '' and due_at <= ?" + kf, t if by_due else 2**62, *ka),
             # 다음 세트에 들어갈 새 카드·복습 수 (세트 구성은 study와 같은 mix_counts)
-            "mix": dict(zip(("new", "review"), mix_counts(20, *due_counts(c, kf, ka)))) if by_due else None,
+            "mix": dict(zip(("new", "review"), mix_counts(20, n_new, n_rev))) if by_due else None,
+            # 밀린 복습 수, 그 때문에 쉬는 새 카드 수(0이면 섞는 중), 오늘 목표 넘김 수 — 복습일을 따르는 범위만
+            "backlog": n_rev if by_due else None,
+            "new_paused": n_new if by_due and n_rev > BACKLOG_MAX else 0,
+            "backlog_max": BACKLOG_MAX,
+            "goal": daily_goal(n_new, n_rev, today) if by_due else None,
             "starred": q("select count(*) from words where starred = 1"),
             "missed": q(f"select count(*) from words where meaning != '' and {MISSES} >= ?", MISSED_MIN),
             "new": q("select count(*) from words where seen = 0"),
@@ -556,7 +585,7 @@ def stats(kind: str | None = None):
             **conn_stats(c),
             **conn_study_stats(c),
             "jobs_active": q("select count(*) from jobs where status in ('pending','processing')"),
-            "today": q("select coalesce(max(reviews),0) from activity where day = ?", kst_day(t)),
+            "today": today,
             "lc": q("select count(*) from words where lc = 1"),
             "lc_today": q("select count(*) from lc_check where day = ?", study_day(t)),
             "lc_left": len(lc_candidates(c)),
@@ -571,6 +600,12 @@ def stats(kind: str | None = None):
 # 짬짬이 몇 세트를 하든 세트마다 알아서 섞이게). 새 카드 몫은 쌓인 비율을 따르되 NEW_SHARE_MIN~MAX로 묶는다 —
 # 밀린 복습이 많아도 새 단어가 멈추지 않고, 사진을 많이 올려 새 카드가 쌓여도 복습이 밀려나지 않게.
 NEW_SHARE_MIN, NEW_SHARE_MAX = 0.15, 0.4
+# 밀린 복습이 BACKLOG_MAX장을 넘으면 새 카드를 아예 넣지 않는다(2026-11-17, 사용자 요청 — 학습 구조 점검 때 제안).
+# 카드 664장 기준 매일 필요한 복습이 약 227회인데 실제 학습은 하루 80회 안팎이라, 15% 최소 몫으로도 새 카드가
+# 계속 들어와 밀린 복습(435장, 중앙값 16일 밀림)이 줄어들 틈이 없었다. 3세트(60장) 아래로 내려오면 다시 섞는다.
+BACKLOG_MAX = 60
+# 홈의 오늘 목표: 밀린 복습을 GOAL_DAYS일에 나눠 갚는 양을 세트(20장) 단위로 올림, GOAL_MIN~MAX로 묶는다.
+GOAL_DAYS, GOAL_MIN, GOAL_MAX = 7, 20, 100
 # 복습은 잊었을 위험이 큰 것부터: 복습일이 지난 시간 ÷ 그 단계의 간격. 1일 간격 카드가 3일 밀린 것(3)이 14일 간격
 # 카드가 3일 밀린 것(0.2)보다 먼저 나온다. '모름'으로 0단계가 된 카드는 간격을 0.5일로 쳐서 앞쪽에 온다.
 # 방금 '모름'한 카드(lapsed)는 단계와 상관없이 0단계처럼 0.5일로 쳐서, 단계가 남아 있어도 바로 앞쪽에 온다.
@@ -580,7 +615,10 @@ RISK = (f"(? - due_at) * 1.0 / (case when lapsed = 1 then {0.5 * DAY} "
 
 
 def mix_counts(limit: int, n_new: int, n_rev: int) -> tuple[int, int]:
-    """세트에 넣을 (새 카드 수, 복습 수). 한쪽이 없으면 다른 쪽으로 다 채운다."""
+    """세트에 넣을 (새 카드 수, 복습 수). 한쪽이 없으면 다른 쪽으로 다 채운다.
+    밀린 복습이 BACKLOG_MAX를 넘으면 새 카드는 0."""
+    if n_rev > BACKLOG_MAX:
+        return 0, min(n_rev, limit)
     if not n_new or not n_rev:
         return min(n_new, limit), min(n_rev, limit)
     share = min(max(n_new / (n_new + n_rev), NEW_SHARE_MIN), NEW_SHARE_MAX)
@@ -600,6 +638,16 @@ def spread(reviews: list, news: list) -> list:
         else:
             out.append(next(it))
     return out
+
+
+def daily_goal(n_new: int, n_rev: int, today: int) -> int:
+    """오늘 목표 넘김 수. 밀린 복습 + 오늘 넘긴 수(= 대략 오늘 아침의 밀린 양)를 GOAL_DAYS일로 나눠 세트 단위로
+    올린다. 지금 낼 수 있는 카드보다 크게 잡지 않는다(다 하면 목표 달성)."""
+    avail = n_rev + (0 if n_rev > BACKLOG_MAX else n_new)
+    if not avail + today:
+        return 0
+    sets = -(-(n_rev + today) // (GOAL_DAYS * 20))  # 올림
+    return min(min(max(sets * 20, GOAL_MIN), GOAL_MAX), avail + today)
 
 
 def due_counts(c, kf="", ka=()) -> tuple[int, int]:
@@ -1154,8 +1202,9 @@ def quiz_refill(c) -> bool:
             break
         for r in rows:
             # 카드에서 이미 본 문장(예문·출제 유형 예시) — AI가 이것과 다른 새 문장을 만들게 넘긴다
-            exam = (json.loads(r.pop("related")) if r["related"] else {}).get("exam") or {}
-            r["avoid"] = [x for x in (r.pop("example"), exam.get("q")) if x]
+            rel = json.loads(r.pop("related")) if r["related"] else {}
+            seen_q = [(rel.get("exam") or {}).get("q")] + [x.get("q") for x in rel.get("exams") or []]
+            r["avoid"] = [x for x in (r.pop("example"), *seen_q) if x]
             busy.add(r["id"])
         t = now()
         c.execute("insert into jobs (kind,payload,created_at,updated_at) values ('quiz',?,?,?)",
@@ -1479,9 +1528,10 @@ def claim(x_worker_token: str | None = Header(None)):
             "where status = 'processing' and updated_at < ?",
             (MAX_ATTEMPTS, MAX_ATTEMPTS, t, t - STALE_SECONDS),
         )
-        # 암기 테스트 채점은 사용자가 결과 화면에서 기다리므로 사진보다 먼저
+        # 암기 테스트 채점은 사용자가 결과 화면에서 기다리므로 사진보다 먼저. 뒤에서 조금씩 채우는 enrich·rank는
+        # 사진·직접 입력·파트 5 문제보다 나중(2026-11-17 — 문제 묶음 작업이 쌓여도 사진이 밀리지 않게)
         r = c.execute(
-            "select * from jobs where status='pending' order by (kind = 'grade') desc, id limit 1"
+            "select * from jobs where status='pending' order by (kind = 'grade') desc, (kind in ('enrich','rank')), id limit 1"
         ).fetchone()
         if not r:
             return Response(status_code=204)
@@ -1509,7 +1559,7 @@ def result(job_id: int, body: ResultIn, x_worker_token: str | None = Header(None
         if r["kind"] == "grade" and not body.error:
             return apply_grades(c, job_id, r, body, t)
         if r["kind"] == "enrich" and not body.error:
-            return apply_related(c, job_id, body, t)
+            return apply_related(c, job_id, r, body, t)
         if r["kind"] == "quiz" and not body.error:
             return apply_quiz(c, job_id, r, body, t)
         if r["kind"] == "rank" and not body.error:
@@ -1566,9 +1616,10 @@ def result(job_id: int, body: ResultIn, x_worker_token: str | None = Header(None
     return res
 
 
-def apply_related(c, job_id, body, t):
+def apply_related(c, job_id, job, body, t):
     """기존 카드 채우기 결과를 저장한다(어휘: 바꿔 말하기·헷갈리는 단어, 문법: 공식 속 단어 뜻)."""
     done = 0
+    exams_job = json.loads(job["payload"]).get("kind") == "exams"
     for it in body.related:
         row = c.execute("select kind, related from words where id = ?", (it.id,)).fetchone()
         if not row:
@@ -1578,8 +1629,12 @@ def apply_related(c, job_id, body, t):
             rel = related_json(old.get("paraphrases"), old.get("confusables"), senses=it.senses)
         elif row["kind"] == "vocab":
             rel = related_json(it.paraphrases, it.confusables, senses=old.get("senses"))
-        else:  # 문법: 이미 있는 출제 유형·앞면 단서는 그대로 두고 단어 뜻만 채운다
-            rel = related_json(terms=it.terms, exam=old.get("exam"), cue=old.get("cue"))
+        elif exams_job:  # 문법 앞면 문제 묶음만 채우는 작업 — 나머지는 그대로
+            rel = related_json(terms=old.get("terms"), exam=old.get("exam"), cue=old.get("cue"), exams=it.exams)
+            if '"exams"' not in rel:  # 전부 형식이 안 맞았다 — 빈 묶음으로 표시해 같은 카드를 계속 다시 넣지 않는다
+                rel = json.dumps({**(json.loads(rel) if rel else {}), "exams": []}, ensure_ascii=False)
+        else:  # 문법: 이미 있는 출제 유형·앞면 단서·문제 묶음은 그대로 두고 단어 뜻만 채운다
+            rel = related_json(terms=it.terms, exam=old.get("exam"), cue=old.get("cue"), exams=old.get("exams"))
         if rel:
             done += c.execute("update words set related = ? where id = ?", (rel, it.id)).rowcount
     res = {"added": [], "duplicates": [], "filled": done}
@@ -1636,6 +1691,36 @@ RANK_BATCH = 40
 FREQ_ORDER = "(case freq when 0 then 2 else freq end)"
 
 
+EXAMS_BATCH, EXAMS_JOBS = 5, 2
+
+
+def exams_refill(c) -> int:
+    """앞면 문제 묶음(related.exams)이 없는 문법 카드를 enrich 작업(payload.kind 'exams')으로 넘긴다.
+    대기·처리 중인 작업이 EXAMS_JOBS개가 될 때까지만 넣어 조금씩 채운다(곧 복습할 카드부터)."""
+    busy, n = set(), 0
+    for (p,) in c.execute("select payload from jobs where kind = 'enrich' and status in ('pending','processing')"):
+        p = json.loads(p)
+        if p.get("kind") == "exams":
+            busy.update(i["id"] for i in p["items"])
+            n += 1
+    t, added = now(), 0
+    while n < EXAMS_JOBS:
+        rows = [dict(r) for r in c.execute(
+            "select id, word, meaning, related from words where kind = 'grammar' and meaning != '' "
+            "and related not like '%\"exams\"%' and id not in (select value from json_each(?)) order by due_at, id limit ?",
+            (json.dumps(list(busy)), EXAMS_BATCH))]
+        if not rows:
+            break
+        for r in rows:
+            rel = json.loads(r.pop("related")) if r["related"] else {}
+            r["avoid"] = (rel.get("exam") or {}).get("q", "")
+            busy.add(r["id"])
+        c.execute("insert into jobs (kind,payload,created_at,updated_at) values ('enrich',?,?,?)",
+                  (json.dumps({"kind": "exams", "items": rows}, ensure_ascii=False), t, t))
+        n, added = n + 1, added + len(rows)
+    return added
+
+
 def rank_refill(c, limit: int | None = None) -> int:
     """중요도가 없는 카드를 rank 작업으로 넘긴다. 이미 대기·처리 중인 rank 작업이 있으면 넣지 않는다."""
     if c.execute("select 1 from jobs where kind = 'rank' and status in ('pending','processing')").fetchone():
@@ -1665,7 +1750,7 @@ def enrich():
     이미 대기 중인 같은 종류의 enrich 작업에 들어간 카드는 다시 넣지 않는다."""
     t = now()
     with db() as c:
-        queued = {k: set() for k in (*KINDS, "senses")}
+        queued = {k: set() for k in (*KINDS, "senses", "exams")}
         for (p,) in c.execute("select payload from jobs where kind = 'enrich' and status in ('pending','processing')"):
             p = json.loads(p)
             queued[p.get("kind", "vocab")].update(i["id"] for i in p["items"])

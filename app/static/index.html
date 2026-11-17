@@ -19,7 +19,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&display=swap">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
-<link rel="stylesheet" href="style.css?v=20261017">
+<link rel="stylesheet" href="style.css?v=20261117">
 <link rel="preload" as="image" href="splash-fg.png">
 </head>
 <body>
@@ -71,7 +71,7 @@
         </div>
         <div class="hero-side">
           <div class="streak"><svg><use href="#i-flame"/></svg><b id="st-streak">0</b>일 연속</div>
-          <p class="muted small">오늘 <b id="st-today">0</b>번 넘겼어요</p>
+          <p class="muted small" id="st-today-line">오늘 <b id="st-today">0</b>번 넘겼어요</p>
           <p id="st-mix" class="muted small" hidden></p>
         </div>
       </div>
@@ -166,7 +166,7 @@
         </div>
         <div id="card-back" class="card-back" hidden>
           <div id="card-cue" class="cue-key" hidden>
-            <div class="cue-label">정답</div>
+            <div id="card-cue-key-label" class="cue-label">핵심</div>
             <div id="card-cue-key" class="cue-answer"></div>
             <div class="cue-label">공식</div>
             <div id="card-cue-formula"></div>
@@ -424,6 +424,6 @@
 </div>
 
 <div id="toast" class="toast" hidden></div>
-<script src="app.js?v=20261017"></script>
+<script src="app.js?v=20261117"></script>
 </body>
 </html>

@@ -327,13 +327,61 @@ JSON 객체 하나만 출력한다. 설명이나 코드 펜스를 붙이지 않�
 """
 
 
+# 문법 카드 앞면 문제 묶음(2026-11-17, 사용자 요청 — "빈칸만 주면 무슨 주제인지 모르겠다, 문제 푸는 형식으로.
+# 같은 문제를 여러 번 보면 답을 외워 버리니 공식 하나로 여러 문제를, 들어갈 수 있는 단어마다 따로, 오답도 비슷한 문법이나
+# 뜻으로 푸는 것까지 섞어서"). 앞면은 매번 이 묶음에서 하나를 골라 보기 순서를 섞어 낸다.
+ENRICH_EXAMS_PROMPT = """너는 토익(TOEIC) 파트 5 출제자다. 아래 문법 공식 카드 각각으로, 수험생이 카드 앞면에서 풀 빈칸 4지선다
+문제를 **여러 개** 만든다. 같은 카드를 몇 번이고 다시 보게 되므로, 문장의 답을 외워서는 못 풀고 **공식을 알아야 풀리게**
+문제마다 문장·정답·오답이 달라야 한다. 카드는 word가 공식, meaning이 핵심 포인트, avoid가 이미 카드에서 본 문장이다.
+
+문제 수와 범위:
+- 카드마다 **4~8문제**. 공식에 들어갈 수 있는 대표 단어(괄호 속 make/have/let, when/where/how/why 같은 나열)가 있으면
+  **단어마다 그 단어가 정답이거나 빈칸의 단서가 되는 문제를 하나씩** 만든다. 대표 단어가 8개보다 많으면 토익에 자주
+  나오는 것부터 골라 서로 다른 단어로 채운다.
+- 공식이 " / "로 갈래가 나뉘면(목적어 있음 → 능동태 / 없음 → 수동태, that + 완전 / which + 명사 + 불완전) **갈래마다
+  적어도 하나씩** 정답이 되게 한다. 한 갈래로만 몰지 않는다.
+- 정답이 매번 같은 단어가 되지 않게 한다(정답 단어가 하나뿐인 공식이면 문장·빈칸 위치·오답 구성을 바꾼다).
+
+오답 구성 — 카드 안에서 아래 방식을 **섞는다**(한 방식만 쓰지 않는다. 그 공식에 맞지 않는 방식은 건너뛴다):
+- 형태: 같은 단어의 다른 형태·품사(complete / completing / completed / completion, notify / being notified / been notified)
+- 비슷한 문법: 같은 자리에 헷갈리는 다른 문법 요소(that / what / which / whether, despite / although / because of / even if,
+  who / whom / whose / which, much / very / so / too)
+- 뜻: 보기 넷이 모두 문법적으로 그 자리에 올 수 있고 **뜻으로만 고르는** 문제(although / because / unless / once,
+  even / only / well / still) — 문장에 뜻을 정할 단서를 분명히 넣는다
+- 복합: 두 기준을 동시에 따져야 하는 것(품사 + 태, 수 일치 + 시제)
+
+문제 규칙(실제 파트 5와 같게):
+- 회사·업무·고객 안내·공지·일정·계약 같은 비즈니스 맥락의 한 문장(12~25단어), 빈칸 `_____`(밑줄 5개) 하나.
+- 보기 4개는 서로 다르고 같은 형태끼리(모두 한 단어 또는 모두 구). 대문자는 문장 첫머리 빈칸일 때만.
+- **정답은 오직 하나.** 다 만들면 오답을 하나씩 빈칸에 넣어 읽어 보고, 원어민이 보기에 문법적으로 맞고 뜻도 자연스러우면
+  그 오답을 바꾸거나 문장에 단서(시제 표지, 수 일치, 목적어 유무, 연결어)를 더 넣는다.
+- 오답은 실제로 쓰이는 단어·형태만(사전에 없는 말, 영어에 없는 형태 X).
+- avoid 문장과 같은 상황·같은 핵심 단어 조합을 쓰지 않고, 카드 안의 문제끼리도 상황(회의, 배송, 채용, 예산 …)을 겹치지 않게 한다.
+
+각 문제 필드:
+- `type`: 출제 유형 15자 이내, **정답을 드러내지 않게** 보기 사이의 대립으로 쓴다(예: "전치사 vs 접속사", "의문사 선택",
+  "목적격 보어 형태", "접속사 뜻 구별"). "형용사 자리"처럼 답이 드러나는 이름은 쓰지 않는다.
+- `q`: 문제 문장 / `choices`: 보기 4개 / `answer`: 정답, 보기 중 하나와 글자까지 똑같이
+- `ko`: 빈칸을 정답으로 채운 문장의 자연스러운 해석
+- `tip`: 왜 그 답인지 한 문장(30~70자) — 빈칸 앞뒤 단서와 카드 공식을 연결해서. 문자열 안에서는 작은따옴표(')만 쓴다.
+
+카드(JSON):
+{items}
+
+JSON 객체 하나만 출력한다. 설명이나 코드 펜스를 붙이지 않는다. 모든 카드에 대해 id를 그대로 써서 한 줄씩:
+{{"related": [{{"id": 1, "exams": [{{"type": "...", "q": "...", "choices": ["...", "...", "...", "..."], "answer": "...", "ko": "...", "tip": "..."}}]}}]}}
+"""
+
+
 def enrich(job, model):
     """기존 카드 채우기(job kind 'enrich') → [{id, paraphrases, confusables}], 문법이면 [{id, terms}],
-    품사별 예문이면(payload.kind 'senses') [{id, senses}]"""
-    keys = ("id", "word", "pos", "meaning", "example")
+    품사별 예문이면(payload.kind 'senses') [{id, senses}], 문법 앞면 문제 묶음이면(payload.kind 'exams') [{id, exams}]"""
+    keys = ("id", "word", "pos", "meaning", "example", "avoid")
     items = [{k: i[k] for k in keys if k in i} for i in job["payload"]["items"]]
     items_json = json.dumps(items, ensure_ascii=False, indent=1)
-    if job["payload"].get("kind") == "senses":
+    if job["payload"].get("kind") == "exams":
+        prompt = ENRICH_EXAMS_PROMPT.format(items=items_json)
+    elif job["payload"].get("kind") == "senses":
         prompt = ENRICH_SENSES_PROMPT.format(items=items_json)
     elif job["payload"].get("kind") == "grammar":
         prompt = ENRICH_GRAMMAR_PROMPT.format(rules=TERMS_RULES, items=items_json)
@@ -680,6 +728,8 @@ def main():
               "rank": env.get("VOCAB_MODEL_RANK", "opus"),
               "grade": env.get("VOCAB_MODEL_GRADE", "sonnet"),
               "quiz": env.get("VOCAB_MODEL_QUIZ", "opus")}
+    # 앞면 문제 묶음은 파트 5 문제처럼 정답이 하나인지가 중요해서 같은 모델(opus)로 만든다
+    models["exams"] = models["quiz"]
     if BACKOFF_FILE.exists() and time.time() - BACKOFF_FILE.stat().st_mtime < BACKOFF_SECONDS:
         return 0
 
@@ -694,6 +744,8 @@ def main():
         job = json.loads(raw)
         log(f"job {job['id']} ({job['kind']}) 시작, 시도 {job['attempts'] + 1}")
         model = models.get(job["kind"], models["text"])
+        if job["kind"] == "enrich" and (job.get("payload") or {}).get("kind") == "exams":
+            model = models["exams"]
         LAST_USAGE.clear()
         try:
             if job["kind"] == "grade":
